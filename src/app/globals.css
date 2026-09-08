@@ -1,0 +1,61 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f4f2ec;
+  --card: #fbfaf6;
+  --ink: #17161b;
+  --muted: #6f6b63;
+  --line: #ddd8cc;
+  --accent: #2f5d50;
+  --pass: #1c7a5b;
+  --fail: #b0402e;
+  --oneoff: #8a6a2f;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-pass: var(--pass);
+  --color-fail: var(--fail);
+  --color-oneoff: var(--oneoff);
+  --font-display: var(--font-display), system-ui, sans-serif;
+  --font-mono: var(--font-mono), ui-monospace, monospace;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Figures line up column-wise only if the digits are tabular. */
+.tabular {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 25%, transparent);
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
