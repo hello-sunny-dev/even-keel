@@ -217,3 +217,52 @@ describe("page furniture is not a merchant", () => {
     expect(withFooter.merchantKey).toBe(without.merchantKey);
   });
 });
+
+describe("a mortgage statement, where the balance is negative", () => {
+  // Jamie's the bank home-loan, reduced to its numbers. Every figure here
+  // is from the real statement; the parser reported it as $8,119.84 out.
+  const MORTGAGE = `
+    Brought Forward -$412,836.27
+    06 Jul 2026 Repayment - Direct Credit $1,538.46 -$411,297.81
+    20 Jul 2026 Repayment - Direct Credit $1,538.46 -$409,759.35
+    31 Jul 2026 Interest Charge -$2,041.13 -$411,800.48
+    03 Aug 2026 Repayment - Direct Credit $1,538.46 -$410,262.02
+    17 Aug 2026 Repayment - Direct Credit $1,538.46 -$408,723.56
+    31 Aug 2026 Repayment - Direct Credit $1,538.46 -$407,185.10
+    31 Aug 2026 Interest Charge -$2,018.79 -$409,203.89
+    Closing Balance -$409,203.89
+  `;
+
+  it("keeps the minus on a balance that is owed, not held", () => {
+    const result = parse(MORTGAGE, { statementYear: 2026 });
+
+    expect(result.openingBalance).toBe(-412836.27);
+    expect(result.closingBalance).toBe(-409203.89);
+  });
+
+  it("reads a repayment as money in, because it reduces the debt", () => {
+    // The sign comes from the balance moving. Read as a positive balance the
+    // deltas invert and every repayment becomes another $1,538.46 owed.
+    const { transactions } = parse(MORTGAGE, { statementYear: 2026 });
+    const repayments = transactions.filter((t) => t.description.includes("Repayment"));
+
+    expect(repayments).toHaveLength(5);
+    expect(repayments.every((t) => t.amount === 1538.46)).toBe(true);
+  });
+
+  it("reads an interest charge as money out", () => {
+    const { transactions } = parse(MORTGAGE, { statementYear: 2026 });
+    const interest = transactions.filter((t) => t.description.includes("Interest"));
+
+    expect(interest.map((t) => t.amount)).toEqual([-2041.13, -2018.79]);
+  });
+
+  it("reconciles, which it did not before", () => {
+    const result = parse(MORTGAGE, { statementYear: 2026 });
+    const moved = result.transactions.reduce((sum, t) => sum + Math.round(t.amount * 100), 0);
+    const drift =
+      Math.round(result.openingBalance! * 100) + moved - Math.round(result.closingBalance! * 100);
+
+    expect(drift).toBe(0);
+  });
+});

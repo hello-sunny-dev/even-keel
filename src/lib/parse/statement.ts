@@ -106,9 +106,18 @@ export function trimBoilerplate(text: string): string {
 
 type Tail = {
   rest: string;
+  /** Magnitude. What the sign should be is decided per column, further down. */
   value: number;
   explicitSign: "-" | "+" | null;
   crdr: "CR" | "DR" | null;
+  /**
+   * The number as printed, minus sign included.
+   *
+   * A running balance is not a magnitude — a mortgage's is negative, and
+   * throwing the sign away inverts every row on the statement. It went
+   * unnoticed because an everyday account's balance is never negative.
+   */
+  signed: number;
 };
 
 function takeTrailingAmount(line: string): Tail | null {
@@ -116,9 +125,11 @@ function takeTrailingAmount(line: string): Tail | null {
   if (!m) return null;
   const trailingMinus = m[3] === "-";
   const sign = m[1] === "-" || trailingMinus ? "-" : m[1] === "+" ? "+" : null;
+  const value = Number(m[2].replace(/,/g, ""));
   return {
     rest: line.slice(0, m.index).trimEnd(),
-    value: Number(m[2].replace(/,/g, "")),
+    value,
+    signed: sign === "-" ? -value : value,
     explicitSign: sign as "-" | "+" | null,
     crdr: m[4] ? (m[4].toUpperCase() as "CR" | "DR") : null,
   };
@@ -233,10 +244,10 @@ export function parseStatementText(
       const tail = takeTrailingAmount(line);
       if (tail && BALANCE_LINE.test(tail.rest)) {
         if (/^opening|brought/i.test(tail.rest)) {
-          openingBalance = tail.value;
-          prevBalance = tail.value;
+          openingBalance = tail.signed;
+          prevBalance = tail.signed;
         } else {
-          closingBalance = tail.value;
+          closingBalance = tail.signed;
         }
         continue;
       }
@@ -264,15 +275,15 @@ export function parseStatementText(
     }
     const second = takeTrailingAmount(first.rest);
     const amountTail = second ?? first;
-    const balance = second ? first.value : null;
+    const balance = second ? first.signed : null;
     const body = amountTail.rest;
 
     if (BALANCE_LINE.test(body)) {
       if (/^opening|brought/i.test(body)) {
-        openingBalance = amountTail.value;
-        prevBalance = amountTail.value;
+        openingBalance = amountTail.signed;
+        prevBalance = amountTail.signed;
       } else {
-        closingBalance = amountTail.value;
+        closingBalance = amountTail.signed;
       }
       continue;
     }
