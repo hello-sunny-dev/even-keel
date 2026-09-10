@@ -57,6 +57,18 @@ const AMOUNT_TAIL =
   /\s*(?:([-+])\s*)?\$?\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\s*(-)?\s*(CR|DR)?$/i;
 
 const BALANCE_LINE = /^(opening|closing|total|brought\s+forward|carried\s+forward|balance)\b/i;
+
+/**
+ * The same words, anywhere in a line rather than only at the start.
+ *
+ * "Closing balance" arrived on its own line after the last transaction and was
+ * merged into that transaction's description as a wrapped merchant name — so
+ * the description was wrong AND the statement lost its closing balance, which
+ * is the only thing that can prove nothing was dropped. Three of the five
+ * statements reported "no balances to check" because of this.
+ */
+const BALANCE_WORDS =
+  /\b(opening|closing|brought\s+forward|carried\s+forward)\s+balance\b|\bbalance\s+(brought|carried)\b/i;
 const CREDIT_WORDS =
   /\b(deposit|salary|payroll|wages|refund|reversal|rebate|credit\s+interest|interest\s+paid|transfer\s+from|received\s+from|payment\s+received|dividend|reimburse\w*)\b/i;
 const NON_CONTINUATION =
@@ -236,12 +248,32 @@ export function parseStatementText(
   let prevBalance: number | null = null;
   let openingBalance: number | null = null;
   let closingBalance: number | null = null;
+  let pendingBalance: "opening" | "closing" | null = null;
 
   for (const line of lines) {
     const dateHit = takeLeadingDate(line);
 
     if (!dateHit) {
       const tail = takeTrailingAmount(line);
+
+      // A label with no number on it: the amount is on the next line. Remember
+      // which label it was and take the next amount-only line as its value.
+      if (!tail && BALANCE_WORDS.test(line)) {
+        pendingBalance = /opening|brought/i.test(line) ? "opening" : "closing";
+        continue;
+      }
+      if (tail && !tail.rest && pendingBalance) {
+        if (pendingBalance === "opening") {
+          openingBalance = tail.signed;
+          prevBalance = tail.signed;
+        } else {
+          closingBalance = tail.signed;
+        }
+        pendingBalance = null;
+        continue;
+      }
+      pendingBalance = null;
+
       if (tail && BALANCE_LINE.test(tail.rest)) {
         if (/^opening|brought/i.test(tail.rest)) {
           openingBalance = tail.signed;
@@ -259,7 +291,8 @@ export function parseStatementText(
         !tail &&
         line.length <= 60 &&
         !NON_CONTINUATION.test(line) &&
-        !BOILERPLATE.test(line)
+        !BOILERPLATE.test(line) &&
+        !BALANCE_WORDS.test(line)
       ) {
         const merged = `${last.description} ${redactDescription(line)}`.replace(/\s+/g, " ").trim();
         last.description = merged;

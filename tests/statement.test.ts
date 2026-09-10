@@ -266,3 +266,37 @@ describe("a mortgage statement, where the balance is negative", () => {
     expect(drift).toBe(0);
   });
 });
+
+describe("a balance label with its amount on the next line", () => {
+  // Three of five real statements reported "no balances to check", which means
+  // nothing could prove a row had not been dropped from any of them.
+  it("finds both balances", () => {
+    const result = parse(
+      [
+        "Opening balance",
+        "4,218.37",
+        "01/07/2026 LUNCH BAR 55 -6.90 4,211.47",
+        "Closing balance",
+        "4,211.47",
+      ].join("\n"),
+      { statementYear: 2026 },
+    );
+
+    expect(result.openingBalance).toBe(4218.37);
+    expect(result.closingBalance).toBe(4211.47);
+  });
+
+  it("does not read the label as part of the last transaction", () => {
+    const { transactions } = parse(
+      ["30/06/2026 INTEREST CHARGE RECEIPT -1987.63 -409203.89", "Closing balance"].join("\n"),
+      { statementYear: 2026 },
+    );
+
+    expect(transactions[0].description).toBe("INTEREST CHARGE RECEIPT");
+  });
+
+  it("keeps working when the label and amount share a line", () => {
+    const result = parse("Closing Balance -$409,203.89", { statementYear: 2026 });
+    expect(result.closingBalance).toBe(-409203.89);
+  });
+});
