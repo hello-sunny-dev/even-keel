@@ -102,8 +102,22 @@ export function redactDescription(raw: string): string {
  * while under-redacting it puts somebody's address in a chat log.
  */
 const PERSONAL: [RegExp, string][] = [
-  // "Mr Alex Morgan & Mrs Robin Lee"
-  [/\b(?:mr|mrs|ms|miss|dr|prof)\b\.?\s+[^,\n]{0,60}/gi, "[name]"],
+  /**
+   * "Mr Alex Morgan & Mrs Robin Lee".
+   *
+   * A title only counts when actual capitalised names follow it. Matching the
+   * title alone and then swallowing whatever came next read `DR` — the debit
+   * marker, which appears on every balance line of a loan statement — as
+   * "Dr.", and ate the figures after it: `$412,836.27 DR $1,426.37` printed
+   * as `$412,836.27 [name],733.18`, taking the statement's own summary with it.
+   *
+   * Title case on both sides, because a statement header writes "Mr Alex
+   * Morgan" while a merchant shouts — matching all-caps too took
+   * "MS OFFICE SUBSCRIPTION".
+   */
+  [/\b(?:Mr|Mrs|Ms|Miss|Dr|Prof)\.?(?:\s+[A-Z][a-z'’-]+){1,4}/gu, "[name]"],
+  // "Account name: A Morgan & R Lee" — the label says what follows it is.
+  [/\b(?:account|client|customer)\s+name\s*:.*/gi, "[name]"],
   // "12 Sample Approach", "3/25 Wellington St"
   [
     /\b\d+[a-z]?(?:\s*\/\s*\d+)?\s+[A-Za-z' ]{2,30}\s(?:approach|street|st|road|rd|avenue|ave|drive|dr|way|court|ct|place|pl|crescent|cres|parade|pde|lane|ln|terrace|tce|boulevard|blvd|close|circuit|cct|grove|gr|rise|loop|entrance|ent|gardens|gdns|highway|hwy)\b\.?/gi,

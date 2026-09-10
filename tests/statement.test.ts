@@ -300,3 +300,32 @@ describe("a balance label with its amount on the next line", () => {
     expect(result.closingBalance).toBe(-409203.89);
   });
 });
+
+describe("a summary block that prints figures above their labels", () => {
+  // the bank's loan statement lays the summary out in two columns, with the amounts
+  // on the row above the words naming them. Read the other way round, the
+  // closing balance is the interest paid and the statement cannot be checked.
+  const SUMMARY = [
+    "$0.00 DR 6.15% p.a.",
+    "Opening balance Current interest rate",
+    "$412,836.27 DR $1,426.37",
+    "Closing balance Interest paid this financial year",
+  ].join("\n");
+
+  it("takes the leading amount from the line above the label", () => {
+    const result = parse(SUMMARY, { statementYear: 2026 });
+
+    expect(result.openingBalance).toBe(0);
+    expect(result.closingBalance).toBe(-412836.27);
+  });
+
+  it("reads DR as owed", () => {
+    // The other column's $1,426.37 is interest paid and belongs to neither
+    // balance; taking the trailing amount would have picked it up.
+    expect(parse(SUMMARY, { statementYear: 2026 }).closingBalance).not.toBe(1426.37);
+  });
+
+  it("does not report zero as negative zero", () => {
+    expect(Object.is(parse(SUMMARY, { statementYear: 2026 }).openingBalance, -0)).toBe(false);
+  });
+});

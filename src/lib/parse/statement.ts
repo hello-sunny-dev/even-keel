@@ -132,6 +132,28 @@ type Tail = {
   signed: number;
 };
 
+/**
+ * The first money-shaped token on a line, with its sign.
+ *
+ * the bank's loan statement lays its summary out in two columns and puts the
+ * figures a row above the words that name them:
+ *
+ *     $412,836.27 DR      $1,426.37
+ *     Closing balance     Interest paid this financial year
+ *
+ * so the closing balance is the *leading* amount of the line before the label,
+ * and the trailing one belongs to the other column entirely.
+ */
+function takeLeadingAmount(line: string): number | null {
+  const m = /^\s*(-)?\s*\$?\s*((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})\s*(-)?\s*(CR|DR)?\b/i.exec(line);
+  if (!m) return null;
+  const value = Number(m[2].replace(/,/g, ""));
+  const negative = m[1] === "-" || m[3] === "-" || (m[4] ?? "").toUpperCase() === "DR";
+  // `$0.00 DR` is zero, not negative zero — which reads as "-$0" and misbehaves
+  // in any later comparison on the sign.
+  return negative && value !== 0 ? -value : value;
+}
+
 function takeTrailingAmount(line: string): Tail | null {
   const m = AMOUNT_TAIL.exec(line);
   if (!m) return null;
@@ -249,17 +271,38 @@ export function parseStatementText(
   let openingBalance: number | null = null;
   let closingBalance: number | null = null;
   let pendingBalance: "opening" | "closing" | null = null;
+  let previousLine: string | null = null;
 
   for (const line of lines) {
+    const wasPrevious = previousLine;
+    previousLine = line;
     const dateHit = takeLeadingDate(line);
 
     if (!dateHit) {
       const tail = takeTrailingAmount(line);
 
-      // A label with no number on it: the amount is on the next line. Remember
-      // which label it was and take the next amount-only line as its value.
+      // A label with no number on it. The amount is on one side or the other:
+      // the bank's loan statement prints the figure first and labels it underneath
+      //
+      //     $412,836.27 DR      $1,426.37
+      //     Closing balance     Interest paid this financial year
+      //
+      // while the everyday statement puts the label first. Take whichever of
+      // the two neighbouring amount-only lines exists.
       if (!tail && BALANCE_WORDS.test(line)) {
-        pendingBalance = /opening|brought/i.test(line) ? "opening" : "closing";
+        const which = /opening|brought/i.test(line) ? "opening" : "closing";
+        const above = wasPrevious === null ? null : takeLeadingAmount(wasPrevious);
+        if (above !== null) {
+          if (which === "opening") {
+            openingBalance = above;
+            prevBalance = above;
+          } else {
+            closingBalance = above;
+          }
+        } else {
+          // Nothing above it: the amount must be on the line below.
+          pendingBalance = which;
+        }
         continue;
       }
       if (tail && !tail.rest && pendingBalance) {
