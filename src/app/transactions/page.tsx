@@ -9,7 +9,11 @@ export default async function Ledger({ searchParams }: { searchParams: Promise<{
   const { db, household: id } = await requireSession();
   const search = (await searchParams).q ?? "";
   const [rows, categories] = await Promise.all([
-    listTransactions(db, id, { search: search || undefined, limit: 500 }),
+    listTransactions(db, id, {
+      search: search || undefined,
+      limit: 500,
+      granularity: "transaction",
+    }),
     categoryMap(db, id),
   ]);
 

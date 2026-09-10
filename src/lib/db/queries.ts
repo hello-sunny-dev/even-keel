@@ -288,12 +288,25 @@ function toTxnRow(r: Record<string, unknown>): TxnRow {
 export async function listTransactions(
   db: Db,
   household: string,
-  opts: { month?: string; search?: string; needsReview?: boolean; limit?: number } = {},
+  opts: {
+    month?: string;
+    search?: string;
+    needsReview?: boolean;
+    limit?: number;
+    /**
+     * The ledger asks for `transaction` only. A hand-entered month total is a
+     * real figure that belongs in every sum, but it is not a line on a
+     * statement and listing it among them invites someone to look for the
+     * receipt.
+     */
+    granularity?: "transaction" | "month";
+  } = {},
 ): Promise<TxnRow[]> {
   const where = ["household_id = $1", "deleted_at is null"];
   const params: unknown[] = [household];
 
   if (opts.month) where.push(`month = $${params.push(opts.month)}`);
+  if (opts.granularity) where.push(`granularity = $${params.push(opts.granularity)}`);
   if (opts.needsReview) where.push("needs_review and not is_split_parent");
   if (opts.search) {
     where.push(`description ilike $${params.push(`%${opts.search}%`)}`);
@@ -723,4 +736,68 @@ export async function setBalance(db: Db, household: string, balance: Balance): P
     [household, balance.accountId, balance.month, balance.amount, balance.contributed],
   );
   return rows.length > 0;
+}
+
+/* ------------------------------------------------------------ manual entry */
+
+/**
+ * The categories this household has actually used, most-used first.
+ *
+ * A month form listing all fifty seed categories is a form nobody fills in.
+ * The ones with history are the ones this household has, and the rest stay one
+ * click away.
+ */
+export async function categoriesWithHistory(db: Db, household: string): Promise<string[]> {
+  const rows = await db.query<{ category_id: string }>(
+    `select category_id, count(*)::int as n
+       from transactions
+      where household_id = $1 and deleted_at is null and category_id is not null
+      group by category_id
+      order by n desc`,
+    [household],
+  );
+  return rows.map((r) => r.category_id);
+}
+
+export type MonthTotal = { categoryId: string; amount: number };
+
+export async function monthTotals(db: Db, household: string, month: string): Promise<MonthTotal[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select category_id, amount::float8 as amount
+       from transactions
+      where household_id = $1 and month = $2
+        and granularity = 'month' and deleted_at is null
+      order by category_id`,
+    [household, month],
+  );
+  return rows.map((r) => ({ categoryId: String(r.category_id), amount: Number(r.amount) }));
+}
+
+/**
+ * Replace a month's hand-entered totals.
+ *
+ * Entering a month again is a correction, not a second month, so the previous
+ * set is soft-deleted first rather than merged. Soft, because the fingerprint
+ * index ignores deleted rows and a hard delete would lose the trail of what
+ * the figure used to be.
+ *
+ * Only month-granularity rows are touched. A month can hold both an imported
+ * statement and hand-entered totals for the categories the statement never
+ * saw, and replacing one must not disturb the other.
+ */
+export async function replaceMonthTotals(
+  db: Db,
+  household: string,
+  month: string,
+  rows: InsertableTransaction[],
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    await tx.query(
+      `update transactions set deleted_at = now()
+        where household_id = $1 and month = $2
+          and granularity = 'month' and deleted_at is null`,
+      [household, month],
+    );
+    return rows.length === 0 ? 0 : insertTransactions(tx, household, rows);
+  });
 }

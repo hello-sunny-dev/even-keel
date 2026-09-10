@@ -279,3 +279,38 @@ looks like good news.
 a trigger, and answered with a sentence rather than a constraint name. Interest on
 a loan is reported as negative growth, because interest costs net worth: a
 repayment is a contribution, not a gain.
+
+---
+
+### 21. A month total is a figure, not a line item
+
+**Why.** The bank sends a statement once a quarter, so two months in three have nothing
+to import. Waiting for the statement means the dashboard is blank most of the time,
+and the whole point is to know each month whether it went well.
+
+**Consequence.** `granularity = 'month'` rows carry a whole month's figure for one
+category. They count in every total, every scenario and every chart, because they
+are real money. They are kept out of the ledger, because the ledger is a list of
+lines somebody could look up and a month total has no receipt behind it — listing
+it there invites a search for one that does not exist. The one-off log will show
+them, labelled.
+
+Entering a month again replaces it rather than adding to it: it is a correction,
+not a second month. The replacement touches only month-granularity rows, so a month
+can hold both an imported statement and hand-entered totals for the categories the
+statement never saw.
+
+---
+
+### 22. The idempotency key comes from the form, not from the values
+
+**Why.** Manual entry has no statement to fingerprint. Fingerprinting the values
+instead would make two genuinely identical entries — the same $4.49 charged twice
+on the same day — collapse into one, which is the exact failure the fingerprint
+exists to prevent everywhere else. Fingerprinting nothing would let a
+double-pressed button write two rows.
+
+**Consequence.** The form generates a key when it opens and rotates it after each
+save. Pressing the button twice writes one row; entering the same thing again a
+minute later writes a second. Verified in a browser: two identical entries, two
+rows.
