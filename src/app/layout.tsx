@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Archivo, IBM_Plex_Mono } from "next/font/google";
+import { Nav } from "@/components/Nav";
 import "./globals.css";
 
 const display = Archivo({ variable: "--font-display", subsets: ["latin"] });
@@ -10,8 +11,8 @@ const mono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Household",
-  description: "Private household finance tracker.",
+  title: "Even Keel",
+  description: "Net worth for two.",
   // Nothing here should ever be indexed.
   robots: { index: false, follow: false, nocache: true },
 };
@@ -19,13 +20,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#f4f2ec",
+  themeColor: "#e8eae5",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${display.variable} ${mono.variable}`}>
-      <body className="min-h-dvh">{children}</body>
+      <body className="min-h-dvh pb-20 sm:pb-0">
+        <Nav />
+        <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6">{children}</main>
+      </body>
     </html>
   );
 }

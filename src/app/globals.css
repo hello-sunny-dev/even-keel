@@ -1,27 +1,60 @@
 @import "tailwindcss";
 
+/*
+ * A ledger, not a dashboard: hairline rules instead of a card per row, and
+ * every figure in tabular numerals so columns actually line up.
+ */
 :root {
-  --paper: #f4f2ec;
-  --card: #fbfaf6;
-  --ink: #17161b;
-  --muted: #6f6b63;
-  --line: #ddd8cc;
-  --accent: #2f5d50;
-  --pass: #1c7a5b;
-  --fail: #b0402e;
+  --paper: #e8eae5;
+  --sheet: #f7f8f4;
+  --sunk: #eef0eb;
+  --ink: #171b18;
+  --muted: #676e67;
+  --faint: #8d948c;
+  --rule: #cfd4ca;
+  --rule-strong: #b3bab0;
+  --accent: #00806a;
+  --spend: #b45309;
+  --pass: #1d6f52;
+  --fail: #a33a26;
   --oneoff: #8a6a2f;
+  --track: #dfe3db;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #101312;
+    --sheet: #1a1e1b;
+    --sunk: #151917;
+    --ink: #e4eae2;
+    --muted: #949c93;
+    --faint: #737b73;
+    --rule: #2a312c;
+    --rule-strong: #3a433c;
+    --accent: #22a37c;
+    --spend: #cf7c33;
+    --pass: #4fbf94;
+    --fail: #e08a72;
+    --oneoff: #c9a45c;
+    --track: #262d28;
+  }
 }
 
 @theme inline {
   --color-paper: var(--paper);
-  --color-card: var(--card);
+  --color-sheet: var(--sheet);
+  --color-sunk: var(--sunk);
   --color-ink: var(--ink);
   --color-muted: var(--muted);
-  --color-line: var(--line);
+  --color-faint: var(--faint);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
   --color-accent: var(--accent);
+  --color-spend: var(--spend);
   --color-pass: var(--pass);
   --color-fail: var(--fail);
   --color-oneoff: var(--oneoff);
+  --color-track: var(--track);
   --font-display: var(--font-display), system-ui, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, monospace;
 }
@@ -32,23 +65,33 @@ body {
   color: var(--ink);
   font-family: var(--font-display), system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Figures line up column-wise only if the digits are tabular. */
 .tabular {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
 }
 
-::selection {
-  background: color-mix(in oklab, var(--accent) 25%, transparent);
+.eyebrow {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 600;
+  color: var(--faint);
 }
 
 input,
 select,
-button {
+button,
+textarea {
   font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

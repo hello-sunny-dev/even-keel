@@ -19,6 +19,15 @@ export function isConfigured(): boolean {
   return Boolean(process.env.APP_PASSWORD);
 }
 
+/**
+ * Running locally with no password set, the gate stands aside so a fresh
+ * clone works. In production the same absence locks everything instead —
+ * an unset secret must never be the thing that opens the door.
+ */
+export function isOpenForDevelopment(): boolean {
+  return process.env.NODE_ENV !== "production" && !process.env.APP_PASSWORD;
+}
+
 const encoder = new TextEncoder();
 
 async function hmac(payload: string): Promise<string> {
