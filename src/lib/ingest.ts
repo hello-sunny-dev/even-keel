@@ -1,5 +1,6 @@
+import { effectiveKind } from "./aggregate";
 import { categorize } from "./categorize";
-import { getCategory } from "./categories";
+import { lookUp, type Categories } from "./categories";
 import type { InsertableTransaction } from "./db/queries";
 import type { ParseResult, ParsedTransaction } from "./parse/statement";
 import type { Rule } from "./rules";
@@ -41,15 +42,21 @@ export type FileReport = {
 export function proposeFrom(
   result: ParseResult,
   sourceFile: string,
+  categories: Categories,
   rules: Rule[] = [],
 ): ProposedTransaction[] {
-  return result.transactions.map((t) => propose(t, sourceFile, rules));
+  return result.transactions.map((t) => propose(t, sourceFile, categories, rules));
 }
 
-function propose(t: ParsedTransaction, sourceFile: string, rules: Rule[]): ProposedTransaction {
-  const match = categorize(t.description, rules);
+function propose(
+  t: ParsedTransaction,
+  sourceFile: string,
+  categories: Categories,
+  rules: Rule[],
+): ProposedTransaction {
+  const match = categorize(t.description, categories, rules);
   const categoryId = match.status === "matched" ? match.categoryId : null;
-  const category = getCategory(categoryId);
+  const category = lookUp(categories, categoryId);
 
   return {
     sourceFingerprint: t.sourceFingerprint,
@@ -61,7 +68,9 @@ function propose(t: ParsedTransaction, sourceFile: string, rules: Rule[]): Propo
     balance: t.balance,
     categoryId,
     oneOff: category?.oneOff ?? false,
-    kind: t.amount > 0 ? "income" : "expense",
+    // The category decides, so a refund stays an expense. The sign is only
+    // the fallback for a row nothing matched.
+    kind: category?.kind ?? (t.amount > 0 ? "income" : "expense"),
     sourceFile,
     duplicate: false,
     include: true,
@@ -145,6 +154,7 @@ export function chainGaps(reports: FileReport[]): string[] {
 export function toInsertable(
   rows: ProposedTransaction[],
   source: "csv" | "pdf" | "manual",
+  categories: Categories,
 ): InsertableTransaction[] {
   return rows
     .filter((row) => row.include && !row.duplicate)
@@ -155,10 +165,12 @@ export function toInsertable(
       merchantKey: row.merchantKey,
       amount: row.amount,
       balance: row.balance,
-      kind: row.kind,
+      // Recomputed rather than taken from the request: the confirm table lets
+      // the category be changed, and kind must follow it.
+      kind: effectiveKind(row, categories),
       categoryId: row.categoryId,
       oneOffOverride: row.categoryId
-        ? row.oneOff === (getCategory(row.categoryId)?.oneOff ?? false)
+        ? row.oneOff === (lookUp(categories, row.categoryId)?.oneOff ?? false)
           ? null
           : row.oneOff
         : row.oneOff || null,

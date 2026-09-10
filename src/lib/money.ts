@@ -37,3 +37,14 @@ export function fromCents(cents: number): number {
 export function sumAmounts(amounts: number[]): number {
   return fromCents(amounts.reduce((acc, a) => acc + toCents(a), 0));
 }
+
+/**
+ * Flip the sign of a total, without producing negative zero.
+ *
+ * Spending is summed as it is stored — negative — and reported positive, so
+ * every one of those totals is a negation. An empty month would otherwise
+ * carry `-0` into comparisons and into anything that reads the sign.
+ */
+export function negated(amount: number): number {
+  return amount === 0 ? 0 : -amount;
+}

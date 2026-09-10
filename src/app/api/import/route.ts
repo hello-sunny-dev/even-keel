@@ -11,7 +11,13 @@ import {
 } from "@/lib/ingest";
 import { extractPdfLines } from "@/lib/parse/pdf";
 import { parseStatementText } from "@/lib/parse/statement";
-import { insertTransactions, listUserRules, recordUpload, finishUpload } from "@/lib/db/queries";
+import {
+  categoryMap,
+  insertTransactions,
+  listUserRules,
+  recordUpload,
+  finishUpload,
+} from "@/lib/db/queries";
 import { requireSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -37,6 +43,7 @@ export async function POST(request: Request) {
 
   const { db, household: id } = await requireSession();
   const rules = await listUserRules(db, id);
+  const categories = await categoryMap(db, id);
 
   // The bytes stay in memory and go out of scope with this request. They are
   // never written to disk or to the database.
@@ -55,7 +62,7 @@ export async function POST(request: Request) {
 
   const parsed = parseStatementText(lines.join("\n"));
   const report = reportFor(parsed, file.name);
-  const proposed = markDuplicatesWithin(proposeFrom(parsed, file.name, rules));
+  const proposed = markDuplicatesWithin(proposeFrom(parsed, file.name, categories, rules));
 
   const existing = await db.query<{ source_fingerprint: string }>(
     `select source_fingerprint from transactions
@@ -81,7 +88,7 @@ export async function PUT(request: Request) {
   }
 
   const { db, household: id } = await requireSession();
-  const rows = toInsertable(body.rows, "pdf");
+  const rows = toInsertable(body.rows, "pdf", await categoryMap(db, id));
 
   // The client's counts are a display; the server decides what actually lands.
   const uploadId = await recordUpload(db, id, {

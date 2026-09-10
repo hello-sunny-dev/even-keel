@@ -41,11 +41,12 @@ export default async function Dashboard({
     );
   }
 
-  const summary = monthlySummary(txns, month, null);
+  const byId = new Map(categories.map((c) => [c.id, c]));
+  const summary = monthlySummary(txns, month, byId, null);
   const targets = new Map(
     categories.filter((c) => c.targetMonthly !== null).map((c) => [c.id, c.targetMonthly!]),
   );
-  const breakdown = categoryBreakdown(txns, month, targets);
+  const breakdown = categoryBreakdown(txns, month, byId, targets);
 
   return (
     <>

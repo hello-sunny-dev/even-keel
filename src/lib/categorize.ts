@@ -1,4 +1,4 @@
-import { getCategory } from "./categories";
+import { lookUp, type Categories } from "./categories";
 import { merchantKey, redactDescription } from "./redact";
 import { PRIORITY, SEED_RULES, type Rule } from "./rules";
 
@@ -56,13 +56,19 @@ function matches(rule: Rule, description: string, key: string): boolean {
  * well, is handed to the review queue rather than guessed at — a wrong
  * category that nobody is asked about is worse than an untagged one.
  */
-export function categorize(rawDescription: string, userRules: Rule[] = []): CategorizeResult {
+export function categorize(
+  rawDescription: string,
+  categories: Categories,
+  userRules: Rule[] = [],
+): CategorizeResult {
   const description = redactDescription(rawDescription);
   const key = merchantKey(rawDescription);
   const all = [...userRules, ...SEED_RULES];
 
   const hits = all
-    .filter((r) => getCategory(r.categoryId) && matches(r, description, key))
+    // A rule pointing at a category this household does not have — merged
+    // away, or seeded for a household that later renamed it — matches nothing.
+    .filter((r) => lookUp(categories, r.categoryId) && matches(r, description, key))
     .sort((a, b) => b.priority - a.priority);
 
   if (hits.length === 0) return { status: "needs_review", reason: "no_match", suggestions: [] };
@@ -88,7 +94,7 @@ export function categorize(rawDescription: string, userRules: Rule[] = []): Cate
     categoryId: top.categoryId,
     ruleId: top.id,
     confidence: CONFIDENCE[top.priority] ?? 0.5,
-    oneOff: getCategory(top.categoryId)!.oneOff,
+    oneOff: lookUp(categories, top.categoryId)!.oneOff,
   };
 }
 

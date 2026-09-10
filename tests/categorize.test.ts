@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { categorize, userMerchantRule } from "@/lib/categorize";
+import { CATEGORIES, type Categories } from "@/lib/categories";
+
+const SEED: Categories = new Map(CATEGORIES.map((c) => [c.id, c]));
 
 const categoryOf = (description: string) => {
-  const result = categorize(description);
+  const result = categorize(description, SEED);
   return result.status === "matched" ? result.categoryId : result.reason;
 };
 
@@ -38,7 +41,7 @@ describe("matching a merchant to a category", () => {
     // wrongly-tagged one is not.
     expect(categoryOf("ZEPHYR TRADING CO")).toBe("no_match");
 
-    const result = categorize("ZEPHYR TRADING CO");
+    const result = categorize("ZEPHYR TRADING CO", SEED);
     expect(result.status).toBe("needs_review");
   });
 
@@ -61,8 +64,8 @@ describe("matching a merchant to a category", () => {
   });
 
   it("carries the category's one-off default through", () => {
-    const events = categorize("TICKETEK PTY LTD");
-    const groceries = categorize("WOOLWORTHS PERTH WA");
+    const events = categorize("TICKETEK PTY LTD", SEED);
+    const groceries = categorize("WOOLWORTHS PERTH WA", SEED);
 
     expect(events.status === "matched" && events.oneOff).toBe(true);
     expect(groceries.status === "matched" && groceries.oneOff).toBe(false);
@@ -72,7 +75,7 @@ describe("matching a merchant to a category", () => {
 describe("remembering a correction", () => {
   it("applies a user's rule ahead of the seed rules", () => {
     const rule = userMerchantRule("METCASH TRADING LTD", "other-discretionary", "user-1");
-    const result = categorize("METCASH TRADING LTD", [rule]);
+    const result = categorize("METCASH TRADING LTD", SEED, [rule]);
 
     expect(result.status === "matched" && result.categoryId).toBe("other-discretionary");
     expect(result.status === "matched" && result.confidence).toBe(1);
@@ -80,7 +83,7 @@ describe("remembering a correction", () => {
 
   it("recognises the same merchant through a different store number", () => {
     const rule = userMerchantRule("ZEPHYR TRADING CO 1234", "food-groceries", "user-2");
-    const result = categorize("ZEPHYR TRADING CO 9876 PERTH", [rule]);
+    const result = categorize("ZEPHYR TRADING CO 9876 PERTH", SEED, [rule]);
 
     expect(result.status === "matched" && result.categoryId).toBe("food-groceries");
   });
@@ -88,7 +91,7 @@ describe("remembering a correction", () => {
   it("asks rather than picks when two rules of equal weight disagree", () => {
     const a = userMerchantRule("SPLIT MERCHANT", "food-groceries", "user-3");
     const b = { ...userMerchantRule("SPLIT MERCHANT", "food-dining", "user-4") };
-    const result = categorize("SPLIT MERCHANT", [a, b]);
+    const result = categorize("SPLIT MERCHANT", SEED, [a, b]);
 
     expect(result.status).toBe("needs_review");
     expect(result.status === "needs_review" && result.reason).toBe("ambiguous");

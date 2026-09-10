@@ -1,5 +1,5 @@
-import { getCategory, type Category, type CategoryGroup } from "./categories";
-import { sumAmounts } from "./money";
+import { lookUp, type Categories, type Category, type CategoryGroup } from "./categories";
+import { negated, sumAmounts } from "./money";
 import { cadenceInDays } from "./cadence";
 import { addMonths, monthIndex, monthRange } from "./months";
 import type { SavingsPlan } from "./savings";
@@ -10,6 +10,12 @@ export type Txn = {
   month: string;
   description: string;
   amount: number;
+  /**
+   * What the row is, as recorded at import. The category is the authority for
+   * income against expense; this is the fallback for an untagged row, and the
+   * only place a transfer is marked.
+   */
+  kind: TxnKind;
   categoryId: string | null;
   /** Per-transaction override; null falls back to the category default. */
   oneOffOverride: boolean | null;
@@ -18,10 +24,35 @@ export type Txn = {
   isSplitParent: boolean;
 };
 
+export type TxnKind = "income" | "expense" | "transfer";
+
 /** One-off is a flag on the data, resolved per transaction, never a name convention. */
-export function isOneOff(txn: Pick<Txn, "categoryId" | "oneOffOverride">): boolean {
+export function isOneOff(
+  txn: Pick<Txn, "categoryId" | "oneOffOverride">,
+  categories: Categories,
+): boolean {
   if (txn.oneOffOverride !== null) return txn.oneOffOverride;
-  return getCategory(txn.categoryId)?.oneOff ?? false;
+  return lookUp(categories, txn.categoryId)?.oneOff ?? false;
+}
+
+/**
+ * Income or expense, decided by the category rather than by the sign.
+ *
+ * A $60 Woolworths refund is a positive amount in an expense category. Reading
+ * the sign calls it income, which raises the month's income, raises core
+ * income, and moves every scenario in the ladder — for money that was never
+ * earned. The category knows what the row is; the sign only knows which way it
+ * moved.
+ *
+ * A transfer is neither, and is marked on the transaction because no category
+ * can tell that moving $500 to a savings account is not spending it.
+ */
+export function effectiveKind(
+  txn: Pick<Txn, "kind" | "categoryId" | "amount">,
+  categories: Categories,
+): TxnKind {
+  if (txn.kind === "transfer") return "transfer";
+  return lookUp(categories, txn.categoryId)?.kind ?? txn.kind;
 }
 
 export function countable(txns: Txn[]): Txn[] {
@@ -52,16 +83,23 @@ export type MonthlySummary = {
 export function monthlySummary(
   txns: Txn[],
   month: string,
+  categories: Categories,
   plan?: Pick<SavingsPlan, "monthlyAmount"> | null,
 ): MonthlySummary {
   const rows = forMonth(txns, month);
-  const income = rows.filter((t) => t.amount > 0);
-  const spend = rows.filter((t) => t.amount < 0);
+  const income = rows.filter((t) => effectiveKind(t, categories) === "income");
+  // Signed, not filtered by sign: a refund is a positive amount in an expense
+  // category and must come off that month's spending rather than be dropped.
+  const spend = rows.filter((t) => effectiveKind(t, categories) === "expense");
 
   const totalIncome = sumAmounts(income.map((t) => t.amount));
-  const oneOffIncome = sumAmounts(income.filter(isOneOff).map((t) => t.amount));
-  const totalSpent = Math.abs(sumAmounts(spend.map((t) => t.amount)));
-  const oneOffSpent = Math.abs(sumAmounts(spend.filter(isOneOff).map((t) => t.amount)));
+  const oneOffIncome = sumAmounts(
+    income.filter((t) => isOneOff(t, categories)).map((t) => t.amount),
+  );
+  const totalSpent = negated(sumAmounts(spend.map((t) => t.amount)));
+  const oneOffSpent = negated(
+    sumAmounts(spend.filter((t) => isOneOff(t, categories)).map((t) => t.amount)),
+  );
 
   const actualSaved = Number((totalIncome - totalSpent).toFixed(2));
   const requiredSaving = plan?.monthlyAmount ?? 0;
@@ -97,36 +135,40 @@ export type CategoryRow = {
 export function categoryBreakdown(
   txns: Txn[],
   month: string,
+  categories: Categories,
   targets: Map<string, number> = new Map(),
 ): CategoryRow[] {
-  const rows = forMonth(txns, month).filter((t) => t.categoryId);
+  // Income has no target and belongs to the summary, not to a table of what
+  // was spent — salary would otherwise sit at the top of every month. Dropped
+  // here rather than after totalling, so a refund nets against its own
+  // category instead of being mistaken for income and removed.
+  const rows = forMonth(txns, month).filter(
+    (t) => t.categoryId && effectiveKind(t, categories) === "expense",
+  );
   const totals = new Map<string, number>();
   for (const t of rows) {
     const key = t.categoryId!;
     totals.set(key, (totals.get(key) ?? 0) + t.amount);
   }
 
-  return (
-    [...totals.entries()]
-      .map(([categoryId, signed]) => {
-        const category = getCategory(categoryId);
-        const actual = Number(Math.abs(signed).toFixed(2));
-        const target = targets.get(categoryId) ?? null;
-        return {
-          categoryId,
-          name: category?.name ?? categoryId,
-          group: category?.group ?? ("Other" as CategoryGroup),
-          oneOff: category?.oneOff ?? false,
-          actual,
-          target,
-          variance: target === null ? null : Number((actual - target).toFixed(2)),
-        };
-      })
-      // Income has no target and belongs to the summary, not to a table of what
-      // was spent — salary would otherwise sit at the top of every month.
-      .filter((row) => getCategory(row.categoryId)?.kind !== "income")
-      .sort((a, b) => b.actual - a.actual)
-  );
+  return [...totals.entries()]
+    .map(([categoryId, signed]) => {
+      const category = lookUp(categories, categoryId);
+      // Negated, not absolute: a category refunded more than it was charged
+      // in a month spent a negative amount, and should read that way.
+      const actual = negated(Number(signed.toFixed(2)));
+      const target = targets.get(categoryId) ?? null;
+      return {
+        categoryId,
+        name: category?.name ?? categoryId,
+        group: category?.group ?? ("Other" as CategoryGroup),
+        oneOff: category?.oneOff ?? false,
+        actual,
+        target,
+        variance: target === null ? null : Number((actual - target).toFixed(2)),
+      };
+    })
+    .sort((a, b) => b.actual - a.actual);
 }
 
 export type RecurringRate = {
@@ -154,6 +196,7 @@ export type RecurringRate = {
 export function recurringMonthlyRate(
   txns: Txn[],
   category: Category,
+  categories: Categories,
   opts: { asOfMonth: string; windowMonths?: number; confirmedRate?: number | null },
 ): RecurringRate {
   // Align the window to whole billing cycles, in months, rounding a
@@ -163,7 +206,7 @@ export function recurringMonthlyRate(
   const rows = countable(txns).filter(
     (t) =>
       t.categoryId === category.id &&
-      t.amount < 0 &&
+      effectiveKind(t, categories) === "expense" &&
       monthIndex(t.month) <= monthIndex(opts.asOfMonth),
   );
 
@@ -206,7 +249,7 @@ export function recurringMonthlyRate(
 
   const from = addMonths(opts.asOfMonth, -(monthsUsed - 1));
   const inWindow = rows.filter((t) => t.month >= from);
-  const total = Math.abs(sumAmounts(inWindow.map((t) => t.amount)));
+  const total = negated(sumAmounts(inWindow.map((t) => t.amount)));
 
   return {
     categoryId: category.id,
@@ -232,7 +275,7 @@ export type TrendPoint = {
   cumulativeNet: number;
 };
 
-export function trendSeries(txns: Txn[], months?: string[]): TrendPoint[] {
+export function trendSeries(txns: Txn[], categories: Categories, months?: string[]): TrendPoint[] {
   const rows = countable(txns);
   if (rows.length === 0) return [];
   const sorted = [...rows].sort((a, b) => a.month.localeCompare(b.month));
@@ -240,7 +283,7 @@ export function trendSeries(txns: Txn[], months?: string[]): TrendPoint[] {
 
   let cumulative = 0;
   return span.map((month) => {
-    const s = monthlySummary(rows, month, null);
+    const s = monthlySummary(rows, month, categories, null);
     cumulative = Number((cumulative + s.actualSaved).toFixed(2));
     return {
       month,
@@ -257,16 +300,17 @@ export function trendSeries(txns: Txn[], months?: string[]): TrendPoint[] {
 
 export function groupSeries(
   txns: Txn[],
+  categories: Categories,
   months: string[],
 ): { month: string; [group: string]: number | string }[] {
-  const rows = countable(txns).filter((t) => t.amount < 0 && !isOneOff(t));
+  const rows = countable(txns).filter(
+    (t) => effectiveKind(t, categories) === "expense" && !isOneOff(t, categories),
+  );
   return months.map((month) => {
     const point: { month: string; [group: string]: number | string } = { month };
     for (const t of rows.filter((r) => r.month === month)) {
-      const group = getCategory(t.categoryId)?.group ?? "Other";
-      point[group] = Number(
-        (((point[group] as number | undefined) ?? 0) + Math.abs(t.amount)).toFixed(2),
-      );
+      const group = lookUp(categories, t.categoryId)?.group ?? "Other";
+      point[group] = Number((((point[group] as number | undefined) ?? 0) - t.amount).toFixed(2));
     }
     return point;
   });

@@ -154,3 +154,34 @@ The proxy verifies signature and expiry only; pages and writes re-read the accou
 compare versions. A password change bumps the column and strands every other device — which
 is the property that mattered — at the cost of a revocation taking effect on the next
 request that reaches the database rather than instantly at the edge.
+
+---
+
+### 13. The categories table is the only authority
+
+**Why.** The seed array and the `categories` table held the same fields, and code read
+whichever was nearer. The settings screen wrote to the table; the aggregates read the
+array. Toggling one-off changed nothing any total could see, and a category the household
+created was invisible to every figure on the dashboard.
+
+**Consequence.** `CATEGORIES` seeds a new household and is never read again.
+`categoryMap(db, household)` returns a `Categories` map, and every function that resolves
+a category — `isOneOff`, `effectiveKind`, `categoryBreakdown`, `groupSeries`,
+`recurringMonthlyRate`, `categorize`, the importer — takes it as an argument. Passing it
+explicitly is noisier than a module-level lookup, which is the point: there is nowhere to
+read a category from by accident.
+
+---
+
+### 14. `kind` decides income, the sign never does
+
+**Why.** A $60 supermarket return is a positive amount in an expense category. Splitting
+income from spending on `amount > 0` counted it as income — which raised the month's
+income, raised core income, and moved all three savings scenarios for money nobody earned.
+The category knows what a row is; the sign only knows which way the money moved.
+
+**Consequence.** `effectiveKind()` reads the category, falling back to the transaction's
+own `kind` for an untagged row, and a transfer stays a transfer whatever category it
+carries. Spending is summed signed, so a refund nets against the category it came from and
+a category refunded more than it was charged reads as negative rather than as spending.
+The database carries the same rule in `transactions_income_is_positive`.

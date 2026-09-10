@@ -36,6 +36,11 @@ export type Category = {
   cadence: Cadence;
 };
 
+/**
+ * Seed data, and nothing else. A new household is stamped with these once;
+ * from then on the `categories` table is the only authority. Read them with
+ * `categoryMap()`, never from here.
+ */
 export const CATEGORIES: Category[] = [
   {
     id: "mortgage-repayment",
@@ -406,7 +411,23 @@ export const CATEGORIES: Category[] = [
   },
 ];
 
-export const CATEGORY_BY_ID = new Map(CATEGORIES.map((c) => [c.id, c]));
+/**
+ * The household's categories, by id.
+ *
+ * Loaded from the database, never from the array above. Toggling one-off or
+ * renaming a category writes to `categories`, so anything that resolves a
+ * category from the seed list is reading a copy that stopped being true the
+ * first time the settings screen was used — and a category the user created
+ * would not be in it at all.
+ */
+export type Categories = ReadonlyMap<string, Category>;
+
+export function lookUp(
+  categories: Categories,
+  id: string | null | undefined,
+): Category | undefined {
+  return id ? categories.get(id) : undefined;
+}
 
 export const GROUP_ORDER: CategoryGroup[] = [
   "Income",
@@ -423,12 +444,9 @@ export const GROUP_ORDER: CategoryGroup[] = [
   "One-off",
 ];
 
-export function categoriesByGroup(): [CategoryGroup, Category[]][] {
+export function byGroup(categories: Categories): [CategoryGroup, Category[]][] {
+  const live = [...categories.values()];
   return GROUP_ORDER.map(
-    (g) => [g, CATEGORIES.filter((c) => c.group === g)] as [CategoryGroup, Category[]],
+    (g) => [g, live.filter((c) => c.group === g)] as [CategoryGroup, Category[]],
   ).filter(([, list]) => list.length > 0);
-}
-
-export function getCategory(id: string | null | undefined): Category | undefined {
-  return id ? CATEGORY_BY_ID.get(id) : undefined;
 }

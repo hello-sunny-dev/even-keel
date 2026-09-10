@@ -20,7 +20,6 @@ export type TxnRow = Txn & {
   merchantKey: string;
   balance: number | null;
   currency: string;
-  txnKind: "income" | "expense" | "transfer";
   source: "csv" | "pdf" | "manual";
   granularity: "transaction" | "month";
   sourceFingerprint: string;
@@ -246,7 +245,7 @@ function toTxnRow(r: Record<string, unknown>): TxnRow {
     merchantKey: String(r.merchant_key ?? ""),
     balance: r.balance === null || r.balance === undefined ? null : Number(r.balance),
     currency: String(r.currency ?? "AUD"),
-    txnKind: r.kind as TxnRow["txnKind"],
+    kind: r.kind as Txn["kind"],
     source: r.source as TxnRow["source"],
     granularity: r.granularity as TxnRow["granularity"],
     sourceFingerprint: String(r.source_fingerprint ?? ""),
