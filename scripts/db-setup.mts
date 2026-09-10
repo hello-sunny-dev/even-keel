@@ -10,6 +10,7 @@
  * what `npm run dev` uses too — so a fresh clone needs no Postgres at all.
  */
 import { join } from "node:path";
+import { DEV_PGLITE_DIR } from "../src/lib/db";
 import { createPgliteDb } from "../src/lib/db/pglite";
 import { migrate } from "../src/lib/db/migrate";
 import type { Db } from "../src/lib/db/port";
@@ -23,8 +24,8 @@ if (url) {
   db = createPostgresDb(url);
   console.log("Using DATABASE_URL");
 } else {
-  db = createPgliteDb(process.env.PGLITE_DIR || ".pglite");
-  console.log("No DATABASE_URL — using a local PGlite database in .pglite/");
+  db = createPgliteDb(process.env.PGLITE_DIR || DEV_PGLITE_DIR);
+  console.log(`No DATABASE_URL — using a local PGlite database in ${DEV_PGLITE_DIR}/`);
 }
 
 try {

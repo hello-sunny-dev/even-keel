@@ -5,18 +5,23 @@
 ```bash
 nvm use                 # Node 22
 npm install             # also installs the pre-commit hook
-cp .env.example .env.local
-npm test                # 92 tests, no database or network needed
+npm run dev             # http://localhost:3000
 ```
 
-**The interface does not exist yet.** Only API routes are built, so `npm run dev` starts
-a server where `/` is a 404. That is expected until the screens land — see the commit
-sequence in `PLAN.md`. What is worth running today is the test suite and the statement
-diagnostic below.
+**No database, no account, no configuration.** With `DATABASE_URL` unset the app runs on
+PGlite — Postgres compiled to WebAssembly, in this process, no server and no network. The
+first visit offers to create an account; from there the app is fully usable.
 
-`DATABASE_URL` can stay empty. Tests use an in-process PGlite database, and `npm run
-db:setup` falls back to a local PGlite database under `.pglite/`, so a fresh clone needs
-no Postgres to do anything.
+That development database is a directory, `.pglite/`, which is gitignored. It survives a
+restart, which is the point — but it is a scratch database on one machine, not a backup
+and not somewhere to keep figures that matter. `npm run db:setup` writes to the same
+place, and the test suite uses its own in-memory one so nothing a test does can touch it.
+
+To throw it away and start over, delete the directory:
+
+```bash
+rm -rf .pglite
+```
 
 ## Diagnosing a real statement
 
@@ -33,15 +38,23 @@ It writes nothing and uploads nothing.
 Real statements belong in `test-fixtures/real/`, which is gitignored. They stay on your
 machine; CI skips the tests that need them.
 
-## Database
+## A real database, when it is time to deploy
 
-Any Postgres works — Supabase and Neon both have a free tier sufficient for two people.
+PGlite is not a deployment target: a serverless filesystem does not persist between
+requests, so on Vercel the directory would be empty every time. Anything hosted needs real
+Postgres — Supabase and Neon both have a free tier sufficient for two people.
 
 ```bash
-# 1. Create a project, copy the connection string into .env.local as DATABASE_URL
-# 2. Apply the schema
+# 1. Create the project yourself and copy the connection string
+# 2. Put it in .env.local as DATABASE_URL — never in the repository
+# 3. Apply the schema
 npm run db:setup
 ```
+
+The connection string is a credential. It belongs in `.env.local` locally and in Vercel's
+environment variables in production, and nowhere else — not in the repository, not in a
+chat, not in a commit message. Setting it is the only change needed: the same SQL runs on
+both, through the `Db` port.
 
 Enable **point-in-time recovery** on the hosted database. Once a month, also take a local
 copy — a provider account is a single point of failure:
