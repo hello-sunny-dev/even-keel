@@ -1,6 +1,7 @@
 import type { Txn } from "../aggregate";
 import type { Cadence } from "../cadence";
 import { CATEGORIES, type Category } from "../categories";
+import type { Goal, SavingsScenario } from "../goals";
 import type { Rule, RuleMatchType, RuleSource } from "../rules";
 import type { Db } from "./port";
 
@@ -64,6 +65,35 @@ export async function createHousehold(
     [name, opts.currency ?? "AUD", opts.timeZone ?? "Australia/Perth"],
   );
   return rows[0].id;
+}
+
+export type HouseholdSettings = {
+  id: string;
+  name: string;
+  displayCurrency: string;
+  locale: string;
+  /**
+   * Whose "today" the app means. Every default month and every "this month"
+   * comes from here rather than from the server clock — at 07:00 on the first
+   * of October in Perth, a UTC server is still in September.
+   */
+  timeZone: string;
+};
+
+export async function householdSettings(db: Db, household: string): Promise<HouseholdSettings> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select id::text, name, display_currency, locale, time_zone
+       from households where id = $1`,
+    [household],
+  );
+  const r = rows[0];
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    displayCurrency: String(r.display_currency),
+    locale: String(r.locale),
+    timeZone: String(r.time_zone),
+  };
 }
 
 /* ------------------------------------------------------------- categories */
@@ -490,4 +520,109 @@ export async function undoUpload(db: Db, household: string, uploadId: string): P
     [household, uploadId],
   );
   return rows.length;
+}
+
+/* ------------------------------------------------------ goals and scenarios */
+
+export async function listGoals(db: Db, household: string): Promise<Goal[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select id::text, kind, name,
+            target_amount::float8 as target_amount,
+            target_months,
+            opening_balance::float8 as opening_balance,
+            annual_rate::float8 as annual_rate,
+            start_month
+       from goals
+      where household_id = $1 and active
+      order by kind`,
+    [household],
+  );
+
+  return rows.map((r) => ({
+    id: String(r.id),
+    kind: r.kind as Goal["kind"],
+    name: String(r.name),
+    targetAmount: Number(r.target_amount),
+    targetMonths: Number(r.target_months),
+    openingBalance: Number(r.opening_balance),
+    annualRate: Number(r.annual_rate),
+    startMonth: String(r.start_month),
+  }));
+}
+
+/**
+ * One active goal per kind, replaced rather than versioned.
+ *
+ * Editing a goal is not history worth keeping — moving the target from
+ * $80,000 to $90,000 means the old one was wrong, not that it happened. The
+ * previous row is deactivated rather than deleted so a mistaken edit can still
+ * be read out of the database.
+ */
+export async function saveGoal(db: Db, household: string, goal: Omit<Goal, "id">): Promise<string> {
+  return db.transaction(async (tx) => {
+    await tx.query(`update goals set active = false where household_id = $1 and kind = $2`, [
+      household,
+      goal.kind,
+    ]);
+    const rows = await tx.query<{ id: string }>(
+      `insert into goals
+         (household_id, kind, name, target_amount, target_months,
+          opening_balance, annual_rate, start_month, active)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, true)
+       returning id::text`,
+      [
+        household,
+        goal.kind,
+        goal.name,
+        goal.targetAmount,
+        goal.targetMonths,
+        goal.openingBalance,
+        goal.annualRate,
+        goal.startMonth,
+      ],
+    );
+    return rows[0].id;
+  });
+}
+
+export async function listSavingsPlans(db: Db, household: string): Promise<SavingsScenario[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select id::text, name, monthly_amount::float8 as monthly_amount, note, active
+       from savings_plans
+      where household_id = $1
+      order by monthly_amount`,
+    [household],
+  );
+
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    monthlyAmount: Number(r.monthly_amount),
+    note: (r.note as string | null) ?? null,
+    active: Boolean(r.active),
+  }));
+}
+
+/**
+ * Replace the whole ladder in one go.
+ *
+ * Every month is scored against all three scenarios, so they are edited as a
+ * set rather than one at a time. `active` decides only which one supplies the
+ * headline verdict, and the unique index allows exactly one.
+ */
+export async function saveSavingsPlans(
+  db: Db,
+  household: string,
+  plans: { name: string; monthlyAmount: number; note?: string | null; active: boolean }[],
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.query(`delete from savings_plans where household_id = $1`, [household]);
+    for (const plan of plans) {
+      await tx.query(
+        `insert into savings_plans (household_id, name, monthly_amount, note, active)
+         values ($1, $2, $3, $4, $5)`,
+        [household, plan.name, plan.monthlyAmount, plan.note ?? null, plan.active],
+      );
+    }
+  });
 }

@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, readSessionToken } from "./auth";
 import { findAccountById, type Account } from "./auth-server";
+import { householdSettings, type HouseholdSettings } from "./db/queries";
 import { db } from "./db";
 import { migrate } from "./db/migrate";
 import type { Db } from "./db/port";
@@ -34,7 +35,12 @@ export function database(): Promise<Db> {
   return registry[READY]!;
 }
 
-export type Session = { db: Db; account: Account; household: string };
+export type Session = {
+  db: Db;
+  account: Account;
+  household: string;
+  settings: HouseholdSettings;
+};
 
 /**
  * The signed-in account, or null.
@@ -52,7 +58,12 @@ export async function currentSession(): Promise<Session | null> {
   const account = await findAccountById(handle, claims.userId);
   if (!account || account.sessionVersion !== claims.version) return null;
 
-  return { db: handle, account, household: account.householdId };
+  return {
+    db: handle,
+    account,
+    household: account.householdId,
+    settings: await householdSettings(handle, account.householdId),
+  };
 }
 
 /**
