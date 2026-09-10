@@ -1,3 +1,5 @@
+import { ThemeToggle } from "./ThemeToggle";
+
 export function AuthShell({
   title,
   lede,
@@ -38,6 +40,12 @@ export function AuthShell({
       {children}
 
       {footnote && <div className="text-faint mt-6 text-xs leading-relaxed">{footnote}</div>}
+
+      {/* Here as well as in Settings: this is the only screen somebody sees
+          before they have an account, and it is the one they stare at longest. */}
+      <div className="mt-10">
+        <ThemeToggle />
+      </div>
     </div>
   );
 }

@@ -74,7 +74,7 @@ export function AccountForm({ endpoint, token, askHousehold, verb }: Mode) {
       <button
         type="submit"
         disabled={busy || !form.email || form.password.length < 10}
-        className="bg-ink text-paper w-full rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+        className="bg-ink text-paper disabled:bg-track disabled:text-muted w-full rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
       >
         {busy ? "Creating…" : verb}
       </button>

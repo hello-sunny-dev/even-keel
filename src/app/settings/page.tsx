@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { Heading, Note } from "@/components/ui";
 import { listHouseholdMembers, listOpenInvites } from "@/lib/auth-server";
 import { requireSession } from "@/lib/session";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChangePassword, Invites } from "./SettingsClient";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +32,15 @@ export default async function Settings() {
             Sign out
           </button>
         </form>
+      </section>
+
+      <section className="mb-10">
+        <p className="eyebrow mb-2">Appearance</p>
+        <ThemeToggle />
+        <p className="text-faint mt-2 text-xs">
+          Auto follows this device. The choice is remembered on this browser only — it is a
+          preference, not a household setting.
+        </p>
       </section>
 
       <section className="mb-10">

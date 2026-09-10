@@ -232,7 +232,7 @@ export function Importer({ categories }: { categories: Category[] }) {
             type="button"
             onClick={commit}
             disabled={busy || keeping.length === 0}
-            className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+            className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
           >
             Import {keeping.length} transactions
           </button>

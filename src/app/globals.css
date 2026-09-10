@@ -21,8 +21,18 @@
   --track: #dfe3db;
 }
 
+/*
+ * Three states, not two: light, dark, and "whatever this device is set to".
+ *
+ * An explicit choice stamps `data-theme` on the root and wins in both
+ * directions. With nothing stamped the operating system decides, which is the
+ * default and what most people want. The dark tokens are therefore written
+ * twice — once for "the OS says dark and nobody overrode it", once for
+ * "somebody chose dark" — because a media query cannot be switched off from
+ * inside the page, and a page on a light Mac must still be able to go dark.
+ */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --paper: #101312;
     --sheet: #1a1e1b;
     --sunk: #151917;
@@ -38,6 +48,32 @@
     --oneoff: #c9a45c;
     --track: #262d28;
   }
+}
+
+:root[data-theme="dark"] {
+  --paper: #101312;
+  --sheet: #1a1e1b;
+  --sunk: #151917;
+  --ink: #e4eae2;
+  --muted: #949c93;
+  --faint: #737b73;
+  --rule: #2a312c;
+  --rule-strong: #3a433c;
+  --accent: #22a37c;
+  --spend: #cf7c33;
+  --pass: #4fbf94;
+  --fail: #e08a72;
+  --oneoff: #c9a45c;
+  --track: #262d28;
+}
+
+/* No transition on the first paint, or the whole page fades in on load. */
+:root[data-theme] body,
+:root[data-theme] body * {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
 }
 
 @theme inline {
@@ -81,12 +117,24 @@ body {
   color: var(--faint);
 }
 
-input,
-select,
-button,
-textarea {
-  font: inherit;
-  color: inherit;
+/*
+ * In `@layer base`, and that is the whole point.
+ *
+ * Unlayered CSS beats anything inside a layer no matter what the specificity
+ * says, and Tailwind puts its utilities in one. Left unlayered, this rule's
+ * `color: inherit` silently defeated every `text-*` class on a button — so
+ * `bg-ink text-paper` rendered a light button whose label inherited the body's
+ * light ink and disappeared into it. Links were unaffected, which is what made
+ * it look like a one-off rather than every button in the app.
+ */
+@layer base {
+  input,
+  select,
+  button,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
 }
 
 :focus-visible {

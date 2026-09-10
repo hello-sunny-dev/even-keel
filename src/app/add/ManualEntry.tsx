@@ -139,7 +139,7 @@ export function OneTransaction({
         <button
           type="submit"
           disabled={busy || !form.amount || !form.description.trim()}
-          className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
         >
           {busy ? "Adding…" : "Add transaction"}
         </button>
@@ -284,7 +284,7 @@ export function WholeMonth({
         <button
           type="submit"
           disabled={busy}
-          className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
         >
           {busy ? "Saving…" : existing.length > 0 ? "Update the month" : "Save the month"}
         </button>

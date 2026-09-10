@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   // path, and every request fails with ERR_INVALID_ARG_TYPE.
   serverExternalPackages: ["pdfjs-dist", "@electric-sql/pglite"],
 
+  // The floating dev badge sits on top of the bottom tab bar, which is where
+  // this app's navigation lives on a phone — so on the primary device it
+  // covers the first tab. The route information it offers is in the terminal
+  // anyway.
+  devIndicators: false,
+
   outputFileTracingIncludes: {
     // The extractor resolves these at runtime; without tracing them the path
     // exists in the deployment but the files do not.

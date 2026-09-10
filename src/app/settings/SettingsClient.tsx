@@ -47,7 +47,7 @@ export function ChangePassword() {
       <button
         type="submit"
         disabled={busy || !form.currentPassword || form.newPassword.length < 10}
-        className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+        className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
       >
         {busy ? "Changing…" : "Change password"}
       </button>
@@ -96,7 +96,7 @@ export function Invites({ initial, origin }: { initial: Invite[]; origin: string
           type="button"
           disabled={busy}
           onClick={() => create("join")}
-          className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
         >
           Invite into this household
         </button>
@@ -104,7 +104,7 @@ export function Invites({ initial, origin }: { initial: Invite[]; origin: string
           type="button"
           disabled={busy}
           onClick={() => create("new_household")}
-          className="border-rule-strong rounded-lg border px-4 py-2 text-sm disabled:opacity-40"
+          className="border-rule-strong disabled:border-rule disabled:text-faint rounded-lg border px-4 py-2 text-sm disabled:cursor-not-allowed"
         >
           Invite someone to start their own
         </button>

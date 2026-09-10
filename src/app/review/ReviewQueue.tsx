@@ -101,7 +101,7 @@ function ReviewRow({ row, categories }: { row: Row; categories: StoredCategory[]
             <button
               type="submit"
               disabled={busy || !categoryId}
-              className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+              className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
             >
               {busy ? "Tagging…" : "Tag"}
             </button>
@@ -265,7 +265,7 @@ function SplitForm({
         <button
           type="submit"
           disabled={busy || remaining !== 0 || parts.some((p) => !p.categoryId)}
-          className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
         >
           {busy ? "Splitting…" : "Split it"}
         </button>

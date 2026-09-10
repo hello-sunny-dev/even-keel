@@ -135,7 +135,7 @@ export function GoalForm({
         <button
           type="submit"
           disabled={busy || !usable}
-          className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
         >
           {busy ? "Saving…" : goal ? "Update goal" : "Set goal"}
         </button>
@@ -255,7 +255,7 @@ export function ScenarioLadder({
         <button
           type="submit"
           disabled={busy}
-          className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
         >
           {busy ? "Saving…" : "Save scenarios"}
         </button>

@@ -70,7 +70,7 @@ export function AddAccount() {
       <button
         type="submit"
         disabled={busy || !name.trim()}
-        className="bg-ink text-paper rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
+        className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
       >
         {busy ? "Adding…" : "Add account"}
       </button>
@@ -189,7 +189,7 @@ export function AccountRow({
         <button
           type="submit"
           disabled={busy || amount === ""}
-          className="border-rule-strong rounded-lg border px-3 py-1.5 text-sm disabled:opacity-40"
+          className="border-rule-strong disabled:border-rule disabled:text-faint rounded-lg border px-3 py-1.5 text-sm disabled:cursor-not-allowed"
         >
           {busy ? "Saving…" : fresh ? "Update" : latest ? "Confirm for this month" : "Save"}
         </button>
