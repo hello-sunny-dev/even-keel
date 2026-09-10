@@ -62,6 +62,48 @@ const CREDIT_WORDS =
 const NON_CONTINUATION =
   /^(page\b|ing\b|www\.|https?:|abn\b|bsb\b|account\s|statement\b|date\s|description\b|balance\b|\d+\s*of\s*\d+$)/i;
 
+/**
+ * Page furniture, which belongs to no transaction.
+ *
+ * The address block and the "send us a secure message" boilerplate sit at the
+ * foot of every sheet, so the parser reaches them immediately after the last
+ * row on that page and — having no date and no amount — they look exactly like
+ * a wrapped description. Real output from a real statement:
+ *
+ *   PETCO NEWCO PTY LTD GPO Box 4094 Sydney NSW Australia 2001 | www.examplebank.com.au
+ *
+ * That is not a merchant. It is one contaminated description per page, which
+ * is also one wrong merchant key per page, which is a categorisation rule that
+ * matches one transaction and never fires again.
+ */
+const BOILERPLATE =
+  /(\bgpo\s+box\b|\bpo\s+box\b|examplebank\.com\.au|\bsecure\s+message\b|\bonline\s+banking\b|\bas\s+soon\s+as\s+possible\b|\babn\b|\bafsl\b|\bterms\s+and\s+conditions\b|\bpage\s+\d+\s+of\s+\d+\b)/i;
+
+/**
+ * Cut a description at the first sign of page furniture.
+ *
+ * The cut lands mid-sentence, because the sentence started on the line before:
+ * "CBA Acme Salary" followed by "…send us a secure message via online
+ * banking" cuts to "CBA Acme Salary us a". Those two leftover words are
+ * enough to change the merchant key, which is what categorisation rules match
+ * on — so a trailing run of all-lowercase words goes too. It only runs on a
+ * line already known to contain prose, and a real merchant carries a capital
+ * somewhere: "Harbour Cafe By Leeson" keeps every word.
+ */
+export function trimBoilerplate(text: string): string {
+  const hit = BOILERPLATE.exec(text);
+  if (!hit) return text;
+
+  const cut = text
+    .slice(0, hit.index)
+    .replace(/[\s|,;:-]+$/, "")
+    .trim();
+
+  const words = cut.split(/\s+/);
+  while (words.length > 1 && /^[a-z]+$/.test(words[words.length - 1])) words.pop();
+  return words.join(" ");
+}
+
 type Tail = {
   rest: string;
   value: number;
@@ -201,7 +243,13 @@ export function parseStatementText(
       // Wrapped description: statements break long merchant text onto a
       // second line with no date and no amount.
       const last = transactions[transactions.length - 1];
-      if (last && !tail && line.length <= 60 && !NON_CONTINUATION.test(line)) {
+      if (
+        last &&
+        !tail &&
+        line.length <= 60 &&
+        !NON_CONTINUATION.test(line) &&
+        !BOILERPLATE.test(line)
+      ) {
         const merged = `${last.description} ${redactDescription(line)}`.replace(/\s+/g, " ").trim();
         last.description = merged;
         last.merchantKey = merchantKey(merged);
@@ -271,7 +319,7 @@ export function parseStatementText(
       signSource = "keyword";
     }
 
-    const description = redactDescription(body);
+    const description = trimBoilerplate(redactDescription(body));
     if (!description) {
       skipped.push(redactDescription(line));
       continue;

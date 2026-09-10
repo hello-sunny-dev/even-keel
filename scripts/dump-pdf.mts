@@ -22,6 +22,7 @@ import { extractPdfLines } from "../src/lib/parse/pdf";
 import { parseStatementText, type ParseResult } from "../src/lib/parse/statement";
 import { redactDescription } from "../src/lib/redact";
 import { formatAUD } from "../src/lib/money";
+import { accountOf, safeName } from "../src/lib/parse/filenames";
 
 const args = process.argv.slice(2);
 const quiet = args.includes("--quiet");
@@ -57,6 +58,7 @@ async function collect(path: string): Promise<string[]> {
 
 type Summary = {
   name: string;
+  account: string;
   result: ParseResult | null;
   error?: string;
   drift: number | null;
@@ -72,7 +74,8 @@ function driftOf(result: ParseResult): number | null {
 }
 
 async function diagnose(path: string): Promise<Summary> {
-  const name = basename(path);
+  const name = safeName(basename(path));
+  const account = accountOf(basename(path));
   const bytes = new Uint8Array(await readFile(path));
   console.log(`\n${"═".repeat(72)}\n${name} — ${(bytes.byteLength / 1024).toFixed(0)} KB`);
 
@@ -93,7 +96,7 @@ async function diagnose(path: string): Promise<Summary> {
           "Run `npm install`, and run this from the repository root.",
       );
     }
-    return { name, result: null, error: message, drift: null };
+    return { name, account, result: null, error: message, drift: null };
   }
 
   if (!quiet) {
@@ -148,7 +151,7 @@ async function diagnose(path: string): Promise<Summary> {
     result.warnings.forEach((warning) => console.log("  " + warning));
   }
 
-  return { name, result, drift };
+  return { name, account, result, drift };
 }
 
 const paths = await collect(target);
@@ -168,35 +171,60 @@ if (summaries.length > 1) {
           ? "✓ reconciles"
           : `✗ off by ${formatAUD(s.drift, { cents: true })}`;
     console.log(
-      `${s.name.padEnd(34)} ${String(s.result?.transactions.length ?? 0).padStart(4)} rows   ${verdict}`,
+      `${s.name.padEnd(40)} ${String(s.result?.transactions.length ?? 0).padStart(4)} rows   ${verdict}`,
     );
   }
 
-  // Statements laid end to end: each one's opening balance should equal the
-  // previous one's closing balance. A gap means a statement is missing, an
-  // overlap means one is counted twice — neither is visible from a single file.
-  const chained = summaries
-    .filter((s) => s.result?.openingBalance != null && s.result?.closingBalance != null)
-    .sort((a, b) =>
-      (a.result!.transactions[0]?.date ?? "").localeCompare(b.result!.transactions[0]?.date ?? ""),
-    );
+  // Statements from one account lay end to end: each one's opening balance
+  // should equal the previous one's closing balance. A gap means a statement is
+  // missing, an overlap means one is counted twice — neither is visible from a
+  // single file. Grouped by account, because two accounts run in parallel and
+  // chaining one to the other says nothing at all.
+  const accounts = [...new Set(summaries.map((s) => s.account))];
   const gaps: string[] = [];
-  for (let i = 1; i < chained.length; i++) {
-    const previous = chained[i - 1].result!;
-    const current = chained[i].result!;
-    const difference = Math.round((current.openingBalance! - previous.closingBalance!) * 100) / 100;
-    if (difference !== 0) {
-      gaps.push(
-        `${chained[i - 1].name} closes at ${previous.closingBalance} but ${chained[i].name} ` +
-          `opens at ${current.openingBalance} — a statement is missing, or these overlap`,
+  const chains: string[] = [];
+
+  for (const account of accounts) {
+    const chained = summaries
+      .filter(
+        (s) =>
+          s.account === account &&
+          s.result?.openingBalance != null &&
+          s.result?.closingBalance != null,
+      )
+      .sort((a, b) =>
+        (a.result!.transactions[0]?.date ?? "").localeCompare(
+          b.result!.transactions[0]?.date ?? "",
+        ),
       );
+
+    if (chained.length < 2) {
+      chains.push(
+        `${account}: ${chained.length} statement with balances — nothing to chain against`,
+      );
+      continue;
     }
+
+    let clean = true;
+    for (let i = 1; i < chained.length; i++) {
+      const previous = chained[i - 1].result!;
+      const current = chained[i].result!;
+      const difference =
+        Math.round((current.openingBalance! - previous.closingBalance!) * 100) / 100;
+      if (difference !== 0) {
+        clean = false;
+        gaps.push(
+          `${chained[i - 1].name} closes at ${previous.closingBalance} but ${chained[i].name} ` +
+            `opens at ${current.openingBalance} — a statement is missing, or these overlap`,
+        );
+      }
+    }
+    if (clean) chains.push(`${account}: ${chained.length} statements chain end to end with no gap`);
   }
-  console.log(
-    gaps.length === 0
-      ? "\nThe statements chain end to end with no gap."
-      : "\n" + gaps.map((g) => "  " + g).join("\n"),
-  );
+
+  console.log("");
+  chains.forEach((line) => console.log("  " + line));
+  gaps.forEach((line) => console.log("  " + line));
 }
 
 console.log("\nNothing was written or uploaded.\n");

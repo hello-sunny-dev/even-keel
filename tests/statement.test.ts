@@ -172,3 +172,48 @@ describe("fingerprints", () => {
     );
   });
 });
+
+describe("page furniture is not a merchant", () => {
+  // Both of these follow real parser output, where the
+  // address block at the foot of a page was merged into whichever transaction
+  // happened to end that page.
+  it("does not glue the footer onto the last row of a page", () => {
+    const { transactions } = parse(`
+      07/09/2026 PETCO NEWCO PTY LTD -51.99
+      GPO Box 4094 Sydney NSW
+      Australia 2001 | www.examplebank.com.au
+    `);
+
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0].description).toBe("PETCO NEWCO PTY LTD");
+  });
+
+  it("cuts the boilerplate that shares a line with the merchant", () => {
+    const { transactions } = parse(
+      `07/09/2026 CBA Acme Salary us a secure message via online banking 2584.19`,
+    );
+
+    expect(transactions[0].description).toBe("CBA Acme Salary");
+  });
+
+  it("still merges a genuinely wrapped merchant name", () => {
+    const { transactions } = parse(`
+      07/09/2026 SQ *CORNER BAKERY -46.00
+      NORTHSIDE WA
+    `);
+
+    expect(transactions[0].description).toBe("SQ *CORNER BAKERY NORTHSIDE WA");
+  });
+
+  it("keeps the merchant key clean, which is what rules match on", () => {
+    const withFooter = parse(`
+      07/09/2026 BUNNINGS 2174 NORTHSID -32.09
+      GPO Box 4094 Sydney NSW
+    `).transactions[0];
+    const without = parse(`07/09/2026 BUNNINGS 2174 NORTHSID -32.09`).transactions[0];
+
+    // A contaminated key is a rule that matches one transaction and never
+    // fires again — the failure is silent and shows up as an untagged queue.
+    expect(withFooter.merchantKey).toBe(without.merchantKey);
+  });
+});
