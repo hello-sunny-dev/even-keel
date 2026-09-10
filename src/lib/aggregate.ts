@@ -122,6 +122,22 @@ export function monthlySummary(
   };
 }
 
+/**
+ * Money that left the cash account without being spent.
+ *
+ * The offense half of the picture: an ETF purchase or an extra super
+ * contribution reduces what is in the bank and raises net worth. Counted as
+ * spending it would score a good month as a bad one, which is why transfers
+ * are their own kind — and why a dashboard that only shows what was saved in
+ * cash is telling half the story.
+ */
+export function movedOut(txns: Txn[], month: string, categories: Categories): number {
+  const rows = forMonth(txns, month).filter(
+    (t) => effectiveKind(t, categories) === "transfer" && t.amount < 0,
+  );
+  return negated(sumAmounts(rows.map((t) => t.amount)));
+}
+
 export type CategoryRow = {
   categoryId: string;
   name: string;

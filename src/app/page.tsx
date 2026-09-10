@@ -1,86 +1,242 @@
 import Link from "next/link";
+import { GoalBar, MonthStrip, Verdict, type MonthBar } from "@/components/charts";
 import { Empty, Heading, Money, Note } from "@/components/ui";
-import { availableMonths, categoryBreakdown, monthlySummary, type Txn } from "@/lib/aggregate";
-import { listCategories, listTransactions } from "@/lib/db/queries";
-import { formatMonth } from "@/lib/months";
+import {
+  availableMonths,
+  categoryBreakdown,
+  monthlySummary,
+  movedOut,
+  trendSeries,
+  type Txn,
+} from "@/lib/aggregate";
+import { currentMonthIn } from "@/lib/dates";
+import { listCategories, listGoals, listSavingsPlans, listTransactions } from "@/lib/db/queries";
+import { goalProgress, scoreScenarios, type Goal } from "@/lib/goals";
+import { addMonths, formatMonth, monthIndex, monthRange } from "@/lib/months";
 import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+
+const STRIP_MONTHS = 12;
 
 export default async function Dashboard({
   searchParams,
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  const { db, household: id } = await requireSession();
-  const [rows, categories] = await Promise.all([listTransactions(db, id), listCategories(db, id)]);
+  const { db, household: id, settings } = await requireSession();
+  const [rows, categoryList, goals, scenarios] = await Promise.all([
+    listTransactions(db, id),
+    listCategories(db, id),
+    listGoals(db, id),
+    listSavingsPlans(db, id),
+  ]);
 
   const txns: Txn[] = rows;
+  const categories = new Map(categoryList.map((c) => [c.id, c]));
   const months = availableMonths(txns);
   const requested = (await searchParams).month;
   const month = requested && months.includes(requested) ? requested : months[0];
 
+  const cashGoal = goals.find((g) => g.kind === "cash");
+  const netWorthGoal = goals.find((g) => g.kind === "net_worth");
+  const active = scenarios.find((s) => s.active) ?? null;
+
   if (!month) {
-    return (
-      <>
-        <Heading eyebrow="Are we on track?" title="Even Keel" />
-        <Empty title="Nothing here yet">
-          Import a statement to get started. Everything else — the month verdict, the category
-          breakdown, the trend — is derived from transactions, so this fills in as soon as there are
-          some.
-          <div className="mt-4">
-            <Link
-              href="/add"
-              className="bg-ink text-paper inline-block rounded-lg px-4 py-2 text-sm font-medium"
-            >
-              Add transactions
-            </Link>
-          </div>
-        </Empty>
-      </>
-    );
+    return <FirstRun hasGoal={Boolean(cashGoal)} hasScenarios={scenarios.length > 0} />;
   }
 
-  const byId = new Map(categories.map((c) => [c.id, c]));
-  const summary = monthlySummary(txns, month, byId, null);
+  const summary = monthlySummary(txns, month, categories, active);
   const targets = new Map(
-    categories.filter((c) => c.targetMonthly !== null).map((c) => [c.id, c.targetMonthly!]),
+    categoryList.filter((c) => c.targetMonthly !== null).map((c) => [c.id, c.targetMonthly!]),
   );
-  const breakdown = categoryBreakdown(txns, month, byId, targets);
+  const breakdown = categoryBreakdown(txns, month, categories, targets);
+  const invested = movedOut(txns, month, categories);
+  const ladder = scoreScenarios(summary.actualSaved, scenarios);
+
+  // The strip is a timeline, not a view of the selection: it ends at the most
+  // recent month there is data for, so a bar can always be clicked in either
+  // direction. Anchoring it to the month being read instead would mean that
+  // opening March left no way back to April except the dropdown — the chart
+  // has to be the navigation, or it is decoration with a click handler.
+  //
+  // It does not begin before the ledger does. A bar for a month with no
+  // transactions is not a month that saved nothing, and a row of them in red
+  // says the household failed at a time it was not yet keeping figures.
+  const earliest = months[months.length - 1];
+  const latest = months[0];
+  const stripEnd = monthIndex(month) > monthIndex(latest) ? month : latest;
+  const window = addMonths(stripEnd, -(STRIP_MONTHS - 1));
+  const stripStart = monthIndex(window) > monthIndex(earliest) ? window : earliest;
+  const strip: MonthBar[] = monthRange(stripStart, stripEnd).map((m) => ({
+    month: m,
+    saved: monthlySummary(txns, m, categories, null).actualSaved,
+    required: active?.monthlyAmount ?? 0,
+  }));
+
+  // Cash on hand, as far as the ledger can tell. Once accounts and balance
+  // snapshots land they become the authority and this becomes the check
+  // against them — a statement knows about money this app never saw.
+  const cashProgress = cashGoal ? progressFromLedger(cashGoal, txns, categories, month) : null;
+
+  const thisMonth = currentMonthIn(settings.timeZone);
+  const years = [...new Set(months.map((m) => m.slice(0, 4)))];
+  const year = month.slice(0, 4);
 
   return (
     <>
       <Heading eyebrow="Are we on track?" title={formatMonth(month, { long: true })} />
 
-      <div className="mb-6 flex flex-wrap gap-2">
-        {months.map((m) => (
-          <Link
-            key={m}
-            href={`/?month=${m}`}
-            className="rounded-full border px-3 py-1 text-sm"
-            style={
-              m === month
-                ? { background: "var(--ink)", color: "var(--paper)", borderColor: "var(--ink)" }
-                : { borderColor: "var(--rule)", color: "var(--muted)" }
-            }
-          >
-            {formatMonth(m, { long: true })}
-          </Link>
-        ))}
-      </div>
+      <form className="mb-6 flex flex-wrap gap-2">
+        <label className="sr-only" htmlFor="month">
+          Month
+        </label>
+        <select
+          id="month"
+          name="month"
+          defaultValue={month}
+          className="border-rule-strong bg-sheet rounded-lg border px-3 py-2 text-sm"
+        >
+          {months.map((m) => (
+            <option key={m} value={m}>
+              {formatMonth(m, { long: true })}
+            </option>
+          ))}
+        </select>
+        <button type="submit" className="border-rule-strong rounded-lg border px-3 py-2 text-sm">
+          Show
+        </button>
+        {years.length > 1 && (
+          <span className="text-faint self-center text-xs">
+            {years.length} years of history · showing {year}
+          </span>
+        )}
+      </form>
+
+      {(cashProgress || netWorthGoal) && (
+        <section className="mb-8 grid gap-4 sm:grid-cols-2">
+          {cashProgress && (
+            <div className="border-rule bg-sunk rounded-lg border p-4">
+              <p className="eyebrow flex items-baseline justify-between">
+                <span>{cashProgress.goal.name}</span>
+                <Verdict good={cashProgress.onTrack}>
+                  {cashProgress.reached ? "Reached" : cashProgress.onTrack ? "On track" : "Behind"}
+                </Verdict>
+              </p>
+              <p className="mt-2 text-2xl font-semibold tracking-tight">
+                <Money amount={cashProgress.balance} />
+                <span className="text-muted text-sm font-normal">
+                  {" "}
+                  of <Money amount={cashProgress.goal.targetAmount} />
+                </span>
+              </p>
+              <GoalBar
+                percent={cashProgress.percent}
+                expectedPercent={expectedPercent(cashProgress.expected, cashProgress.goal)}
+                onTrack={cashProgress.onTrack}
+              />
+              <p className="text-muted text-xs">
+                The mark is where {formatMonth(month, { long: true })} should have reached:{" "}
+                <Money amount={cashProgress.expected} />.{" "}
+                {cashProgress.reached ? (
+                  "Done."
+                ) : (
+                  <>
+                    <Money amount={cashProgress.requiredMonthly} /> a month for the remaining{" "}
+                    {cashProgress.monthsRemaining} gets there.
+                  </>
+                )}
+              </p>
+              <p className="text-faint mt-2 text-xs">
+                Worked out from the ledger, not from a bank balance — money this app has never seen
+                is not in it.
+              </p>
+            </div>
+          )}
+
+          {netWorthGoal && (
+            <div className="border-rule bg-sunk rounded-lg border p-4">
+              <p className="eyebrow">{netWorthGoal.name}</p>
+              <p className="text-muted mt-2 text-sm">
+                Target <Money amount={netWorthGoal.targetAmount} /> in {netWorthGoal.targetMonths}{" "}
+                months.
+              </p>
+              <p className="text-faint mt-2 text-xs">
+                Nothing to measure it against yet. Net worth is super, property and loans as well as
+                cash, and none of those are in the ledger — they need account balances, which is the
+                next thing being built.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      <MonthStrip months={strip} selected={month} href={(m) => `/?month=${m}`} />
+
+      <section className="mb-8 grid gap-4 sm:grid-cols-2">
+        <div className="border-rule bg-sunk rounded-lg border p-4">
+          <p className="eyebrow">Defense — kept from income</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight">
+            <Money amount={summary.actualSaved} tone />
+          </p>
+          <p className="text-muted mt-1 text-xs">
+            <Money amount={summary.totalIncome} /> in, <Money amount={summary.totalSpent} /> out.
+          </p>
+        </div>
+        <div className="border-rule bg-sunk rounded-lg border p-4">
+          <p className="eyebrow">Offense — moved to investments</p>
+          <p className="mt-1 text-2xl font-semibold tracking-tight">
+            <Money amount={invested} />
+          </p>
+          <p className="text-muted mt-1 text-xs">
+            {invested > 0
+              ? "Out of cash and into assets. Not spending, and not counted as it."
+              : "Nothing marked as a transfer this month."}
+          </p>
+        </div>
+      </section>
+
+      {ladder.length > 0 && (
+        <section className="mb-8">
+          <p className="eyebrow mb-2">Against every scenario</p>
+          <ul className="border-rule-strong border-t">
+            {ladder.map((s) => (
+              <li
+                key={s.scenario.id}
+                className="border-rule flex items-baseline justify-between gap-3 border-b py-2.5"
+              >
+                <span className="flex items-baseline gap-2 text-sm">
+                  {s.scenario.name}
+                  {s.scenario.active && <span className="text-faint text-xs">ours</span>}
+                </span>
+                <span className="flex items-baseline gap-3">
+                  <span className="text-muted text-xs">
+                    needs <Money amount={s.required} />
+                  </span>
+                  <span className="tabular text-sm">
+                    <Money amount={s.vsPlan} signed tone />
+                  </span>
+                  <Verdict good={s.passed}>{s.passed ? "Cleared" : "Short"}</Verdict>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <dl className="border-rule-strong mb-6 border-t">
         <Row label="Total income" value={<Money amount={summary.totalIncome} />} />
         <Row label="Total spent" value={<Money amount={summary.totalSpent} />} />
-        <div className="border-rule flex items-baseline justify-between gap-4 border-b py-4">
-          <dt className="text-sm font-medium">Actual saved</dt>
-          <dd className="m-0 text-3xl font-semibold tracking-tight">
-            <Money amount={summary.actualSaved} tone />
-          </dd>
-        </div>
         <Row label="One-off costs" value={<Money amount={summary.oneOffSpent} />} />
         <Row label="Recurring" value={<Money amount={summary.recurringSpent} />} />
       </dl>
+
+      {month !== thisMonth && (
+        <p className="text-faint mb-6 text-xs">
+          Reading {formatMonth(month, { long: true })}. Today is in{" "}
+          {formatMonth(thisMonth, { long: true })}.
+        </p>
+      )}
 
       {summary.needsReviewCount > 0 && (
         <div className="mb-6">
@@ -156,6 +312,70 @@ export default async function Dashboard({
           </table>
         </div>
       )}
+    </>
+  );
+}
+
+/**
+ * Cash on hand as the ledger understands it: where the goal started, plus
+ * every month kept since.
+ *
+ * Deliberately not called a balance. Once account snapshots exist they are the
+ * authority and this becomes the reconciliation against them — the two will
+ * differ by timing and by anything that never crossed the imported account,
+ * and showing them as rivals is more honest than picking one.
+ */
+function progressFromLedger(
+  goal: Goal,
+  txns: Txn[],
+  categories: Parameters<typeof monthlySummary>[2],
+  month: string,
+) {
+  const series = trendSeries(txns, categories);
+  const kept = series
+    .filter((p) => monthIndex(p.month) >= monthIndex(goal.startMonth) && p.month <= month)
+    .reduce((sum, p) => sum + p.saved, 0);
+  return goalProgress(goal, goal.openingBalance + kept, month);
+}
+
+/** Where to stand the marker, on the same scale the bar is drawn on. */
+function expectedPercent(expected: number, goal: Goal): number {
+  const journey = goal.targetAmount - goal.openingBalance;
+  if (journey <= 0) return 100;
+  return Math.max(0, Math.min(100, ((expected - goal.openingBalance) / journey) * 100));
+}
+
+function FirstRun({ hasGoal, hasScenarios }: { hasGoal: boolean; hasScenarios: boolean }) {
+  const steps = [
+    { done: hasGoal, label: "Set what you are aiming at", href: "/goals", cta: "Goals" },
+    { done: hasScenarios, label: "Pick the three scenarios", href: "/goals", cta: "Goals" },
+    { done: false, label: "Import a statement", href: "/add", cta: "Add transactions" },
+  ];
+
+  return (
+    <>
+      <Heading eyebrow="Are we on track?" title="Even Keel" />
+      <Empty title="Nothing to score yet">
+        Everything on this page is worked out from transactions, so it fills in as soon as there are
+        some. Three steps:
+        <ol className="mx-auto mt-4 max-w-xs space-y-2 text-left">
+          {steps.map((step) => (
+            <li key={step.label} className="flex items-baseline gap-2 text-sm">
+              <span aria-hidden style={{ color: step.done ? "var(--pass)" : "var(--faint)" }}>
+                {step.done ? "✓" : "○"}
+              </span>
+              <span style={{ textDecoration: step.done ? "line-through" : undefined }}>
+                {step.label}
+              </span>
+              {!step.done && (
+                <Link href={step.href} className="ml-auto underline">
+                  {step.cta}
+                </Link>
+              )}
+            </li>
+          ))}
+        </ol>
+      </Empty>
     </>
   );
 }

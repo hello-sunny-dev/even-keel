@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { categoryBreakdown, effectiveKind, monthlySummary, type Txn } from "@/lib/aggregate";
+import {
+  categoryBreakdown,
+  effectiveKind,
+  monthlySummary,
+  movedOut,
+  type Txn,
+} from "@/lib/aggregate";
 import { CATEGORIES, type Categories } from "@/lib/categories";
 import { toInsertable, type ProposedTransaction } from "@/lib/ingest";
 import { categoryMap, insertTransactions, listTransactions } from "@/lib/db/queries";
@@ -102,6 +108,16 @@ describe("a transfer is neither", () => {
   it("stays a transfer even when it carries a spending category", () => {
     const kind = effectiveKind({ ...toSavings, categoryId: "food-groceries" }, SEED);
     expect(kind).toBe("transfer");
+  });
+
+  it("counts as offense — money out of cash that was not spent", () => {
+    const spend: Txn = { ...toSavings, id: "s", kind: "expense", amount: -184.55 };
+    const inbound: Txn = { ...toSavings, id: "i", amount: 500 };
+
+    // Only what left. A transfer landing back in cash is the same money
+    // arriving, and adding both sides would count the move twice.
+    expect(movedOut([toSavings, spend, inbound], "2025-03", SEED)).toBe(500);
+    expect(movedOut([spend], "2025-03", SEED)).toBe(0);
   });
 });
 

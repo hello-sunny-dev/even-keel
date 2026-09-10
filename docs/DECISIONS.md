@@ -185,3 +185,37 @@ own `kind` for an untagged row, and a transfer stays a transfer whatever categor
 carries. Spending is summed signed, so a refund nets against the category it came from and
 a category refunded more than it was charged reads as negative rather than as spending.
 The database carries the same rule in `transactions_income_is_positive`.
+
+---
+
+### 15. Cleared and short are told apart by geometry, not by colour
+
+**Why.** The month strip's whole job is pass or fail at a glance, and green against
+red is the one pair dichromatic vision cannot separate. Measured against this
+palette with the validator, not by eye: ΔE 7.3 for deuteranopia in light mode and
+5.1 in dark, where 8 is the bar. Saturating the green made it _worse_ — 6.2 — so
+there is no version of green-and-red that passes.
+
+**Consequence.** A dashed line is drawn across the strip at what the month had to
+clear, on top of the bars. A bar ending under it is short, and the gap says by how
+much — which is more than the colour was saying anyway. Colour agrees with the
+geometry rather than carrying it. Every verdict elsewhere is a word (`Cleared`,
+`Short`, `On track`, `Behind`) with the colour behind it, never a colour alone, and
+the strip carries a screen-reader table of the same figures.
+
+**Also considered.** Texture or a marker on short months. Rejected: the line costs
+the same and also answers "by how much", which neither does.
+
+---
+
+### 16. The strip is anchored to the ledger, not to the selection
+
+**Why.** Anchored to the month being read, opening March left no way back to April
+except the dropdown — a chart that is supposed to _be_ the navigation became
+decoration with a click handler. And extended back a fixed twelve months it drew
+ten red bars for months before the household kept any figures at all, which reads
+as ten failures rather than as no data.
+
+**Consequence.** The window ends at the most recent month with data and never
+begins before the earliest, so bars can be clicked in both directions and every bar
+stands for a month that actually happened.
