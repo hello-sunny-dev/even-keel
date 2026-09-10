@@ -1,17 +1,24 @@
 {
-  "name": "09-household-finance-tracker",
+  "name": "even-keel",
   "version": "0.1.0",
   "private": true,
+  "description": "Net worth for two — a private household tracker.",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "dump": "tsx scripts/dump-pdf.mts",
     "fixture:sample": "node scripts/make-sample-pdf.mjs",
-    "db:setup": "node scripts/db-setup.mjs"
+    "prepare": "simple-git-hooks"
   },
   "dependencies": {
     "framer-motion": "^12.40.0",
@@ -30,10 +37,27 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "lint-staged": "^16.2.6",
     "pdf-lib": "^1.17.1",
+    "prettier": "^3.6.2",
+    "prettier-plugin-tailwindcss": "^0.6.14",
+    "simple-git-hooks": "^2.13.1",
     "tailwindcss": "^4",
+    "tsx": "^4.20.6",
     "typescript": "^5",
     "vitest": "^3.2.4"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,mjs,js}": [
+      "prettier --write",
+      "eslint --fix --max-warnings=0"
+    ],
+    "*.{json,css,md,yml,yaml}": [
+      "prettier --write"
+    ]
   },
   "overrides": {
     "postcss": "^8.5.18",

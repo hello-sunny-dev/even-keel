@@ -30,7 +30,20 @@ export function monthRange(from: string, to: string): string[] {
   return out;
 }
 
-const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
 export function formatMonth(month: string, opts?: { long?: boolean }): string {
   const [y, m] = month.split("-").map(Number);
@@ -38,6 +51,9 @@ export function formatMonth(month: string, opts?: { long?: boolean }): string {
   return opts?.long ? `${name} ${y}` : `${name} ${String(y).slice(2)}`;
 }
 
-export function currentMonth(now = new Date()): string {
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
-}
+/**
+ * The current month depends on where the person is standing. Pass their zone
+ * — `currentMonthIn` in `dates.ts` is the implementation; this re-export keeps
+ * month helpers in one place.
+ */
+export { currentMonthIn as currentMonth } from "./dates";

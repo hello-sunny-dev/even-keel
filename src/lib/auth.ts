@@ -22,9 +22,13 @@ export function isConfigured(): boolean {
 const encoder = new TextEncoder();
 
 async function hmac(payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", encoder.encode(secret()), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-  ]);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
   const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
   return Array.from(new Uint8Array(sig))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -55,7 +59,10 @@ export async function createSessionToken(now = Date.now()): Promise<string> {
   return `${expires}.${await hmac(String(expires))}`;
 }
 
-export async function verifySessionToken(token: string | undefined, now = Date.now()): Promise<boolean> {
+export async function verifySessionToken(
+  token: string | undefined,
+  now = Date.now(),
+): Promise<boolean> {
   if (!token) return false;
   const [expiresRaw, signature] = token.split(".");
   const expires = Number(expiresRaw);

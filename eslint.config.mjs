@@ -5,14 +5,22 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  // Override default ignores of eslint-config-next.
-  globalIgnores([
-    // Default ignores of eslint-config-next:
-    ".next/**",
-    "out/**",
-    "build/**",
-    "next-env.d.ts",
-  ]),
+  {
+    // Statement text and amounts must never reach a log. Everything that
+    // touches household data lives under src/, so the ban lives there.
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-console": "error",
+    },
+  },
+  {
+    // Local diagnostic tooling — printing is the entire point.
+    files: ["scripts/**/*.{ts,mjs}"],
+    rules: {
+      "no-console": "off",
+    },
+  },
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "test-fixtures/**"]),
 ]);
 
 export default eslintConfig;

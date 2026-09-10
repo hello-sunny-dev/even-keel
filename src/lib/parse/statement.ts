@@ -26,8 +26,19 @@ export type ParseResult = {
 };
 
 const MONTHS: Record<string, number> = {
-  jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6,
-  jul: 7, aug: 8, sep: 9, sept: 9, oct: 10, nov: 11, dec: 12,
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  aug: 8,
+  sep: 9,
+  sept: 9,
+  oct: 10,
+  nov: 11,
+  dec: 12,
 };
 
 const DATE_SLASH = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4}|\d{2})\b/;
@@ -40,9 +51,15 @@ const AMOUNT_TAIL =
 const BALANCE_LINE = /^(opening|closing|total|brought\s+forward|carried\s+forward|balance)\b/i;
 const CREDIT_WORDS =
   /\b(deposit|salary|payroll|wages|refund|reversal|rebate|credit\s+interest|interest\s+paid|transfer\s+from|received\s+from|payment\s+received|dividend|reimburse\w*)\b/i;
-const NON_CONTINUATION = /^(page\b|ing\b|www\.|https?:|abn\b|bsb\b|account\s|statement\b|date\s|description\b|balance\b|\d+\s*of\s*\d+$)/i;
+const NON_CONTINUATION =
+  /^(page\b|ing\b|www\.|https?:|abn\b|bsb\b|account\s|statement\b|date\s|description\b|balance\b|\d+\s*of\s*\d+$)/i;
 
-type Tail = { rest: string; value: number; explicitSign: "-" | "+" | null; crdr: "CR" | "DR" | null };
+type Tail = {
+  rest: string;
+  value: number;
+  explicitSign: "-" | "+" | null;
+  crdr: "CR" | "DR" | null;
+};
 
 function takeTrailingAmount(line: string): Tail | null {
   const m = AMOUNT_TAIL.exec(line);
@@ -78,13 +95,23 @@ type DateHit = { day: number; month: number; year: number | null; rest: string }
 function takeLeadingDate(line: string): DateHit | null {
   let m = DATE_SLASH.exec(line);
   if (m) {
-    return { day: Number(m[1]), month: Number(m[2]), year: fullYear(m[3]), rest: line.slice(m[0].length) };
+    return {
+      day: Number(m[1]),
+      month: Number(m[2]),
+      year: fullYear(m[3]),
+      rest: line.slice(m[0].length),
+    };
   }
   m = DATE_NAMED.exec(line);
   if (m) {
     const mon = MONTHS[m[2].toLowerCase()];
     if (mon) {
-      return { day: Number(m[1]), month: mon, year: m[3] ? fullYear(m[3]) : null, rest: line.slice(m[0].length) };
+      return {
+        day: Number(m[1]),
+        month: mon,
+        year: m[3] ? fullYear(m[3]) : null,
+        rest: line.slice(m[0].length),
+      };
     }
   }
   m = DATE_SLASH_NO_YEAR.exec(line);
@@ -97,7 +124,8 @@ function takeLeadingDate(line: string): DateHit | null {
 /** Best-effort year for statements that print `DD/MM` with the year only in the header. */
 export function extractStatementYear(lines: string[]): number | null {
   const head = lines.slice(0, 40).join(" ");
-  const labelled = /(?:statement\s+period|period|for\s+the\s+period|issued)[^\n]{0,80}?\b(20\d{2})\b/i.exec(head);
+  const labelled =
+    /(?:statement\s+period|period|for\s+the\s+period|issued)[^\n]{0,80}?\b(20\d{2})\b/i.exec(head);
   if (labelled) return Number(labelled[1]);
   const any = /\b(20\d{2})\b/.exec(head);
   return any ? Number(any[1]) : null;
@@ -118,7 +146,7 @@ function near(a: number, b: number): boolean {
  */
 export function parseStatementText(
   text: string,
-  opts: { statementYear?: number } = {},
+  opts: { statementYear?: number; fallbackYear?: number } = {},
 ): ParseResult {
   const lines = text
     .split("\n")
@@ -129,8 +157,19 @@ export function parseStatementText(
   const skipped: string[] = [];
   const warnings: string[] = [];
 
-  const statementYear = opts.statementYear ?? extractStatementYear(lines) ?? new Date().getUTCFullYear();
-  let year = statementYear;
+  const headerYear = opts.statementYear ?? extractStatementYear(lines);
+  // Never guess the year from the server clock: importing last year's DD/MM
+  // statement in January would file every row twelve months out, silently.
+  // Fall back only to what the caller supplied, and say so loudly.
+  const statementYear = headerYear ?? opts.fallbackYear ?? null;
+  if (headerYear === null) {
+    warnings.push(
+      statementYear === null
+        ? "No year found in this statement. Dates are unusable until a year is supplied."
+        : `No year found in this statement — assuming ${statementYear}. Check the dates before importing.`,
+    );
+  }
+  let year = statementYear ?? 0;
   let prevMonth: number | null = null;
   let prevBalance: number | null = null;
   let openingBalance: number | null = null;
@@ -190,7 +229,7 @@ export function parseStatementText(
     }
     prevMonth = dateHit.month;
 
-    const date = isoDate(year, dateHit.month, dateHit.day);
+    const date = year > 0 ? isoDate(year, dateHit.month, dateHit.day) : null;
     if (!date) {
       warnings.push(`Unreadable date on a line — skipped: ${redactDescription(line).slice(0, 40)}`);
       continue;
@@ -204,10 +243,18 @@ export function parseStatementText(
     } else if (amountTail.crdr) {
       signed = amountTail.crdr === "CR" ? amountTail.value : -amountTail.value;
       signSource = "cr_dr";
-    } else if (balance !== null && prevBalance !== null && near(prevBalance + amountTail.value, balance)) {
+    } else if (
+      balance !== null &&
+      prevBalance !== null &&
+      near(prevBalance + amountTail.value, balance)
+    ) {
       signed = amountTail.value;
       signSource = "balance";
-    } else if (balance !== null && prevBalance !== null && near(prevBalance - amountTail.value, balance)) {
+    } else if (
+      balance !== null &&
+      prevBalance !== null &&
+      near(prevBalance - amountTail.value, balance)
+    ) {
       signed = -amountTail.value;
       signSource = "balance";
     } else {
@@ -243,6 +290,8 @@ export function parseStatementText(
 }
 
 /** Stable identity for a transaction, so re-uploading a statement cannot double-count. */
-export function transactionFingerprint(t: Pick<ParsedTransaction, "date" | "description" | "amount">): string {
+export function transactionFingerprint(
+  t: Pick<ParsedTransaction, "date" | "description" | "amount">,
+): string {
   return `${t.date}|${t.description.toUpperCase().replace(/\s+/g, " ")}|${t.amount.toFixed(2)}`;
 }

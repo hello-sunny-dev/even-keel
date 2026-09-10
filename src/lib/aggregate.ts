@@ -48,7 +48,11 @@ export type MonthlySummary = {
   transactionCount: number;
 };
 
-export function monthlySummary(txns: Txn[], month: string, plan?: Pick<SavingsPlan, "monthlyAmount"> | null): MonthlySummary {
+export function monthlySummary(
+  txns: Txn[],
+  month: string,
+  plan?: Pick<SavingsPlan, "monthlyAmount"> | null,
+): MonthlySummary {
   const rows = forMonth(txns, month);
   const income = rows.filter((t) => t.amount > 0);
   const spend = rows.filter((t) => t.amount < 0);
@@ -148,10 +152,16 @@ export function recurringMonthlyRate(
 ): RecurringRate {
   const cadence = Math.max(1, category.cadenceMonths);
   const rows = countable(txns).filter(
-    (t) => t.categoryId === category.id && t.amount < 0 && monthIndex(t.month) <= monthIndex(opts.asOfMonth),
+    (t) =>
+      t.categoryId === category.id &&
+      t.amount < 0 &&
+      monthIndex(t.month) <= monthIndex(opts.asOfMonth),
   );
 
-  const firstMonth = rows.reduce<string | null>((min, t) => (min === null || t.month < min ? t.month : min), null);
+  const firstMonth = rows.reduce<string | null>(
+    (min, t) => (min === null || t.month < min ? t.month : min),
+    null,
+  );
   const monthsAvailable = firstMonth ? monthIndex(opts.asOfMonth) - monthIndex(firstMonth) + 1 : 0;
 
   if (opts.confirmedRate !== null && opts.confirmedRate !== undefined) {
@@ -235,13 +245,18 @@ export function trendSeries(txns: Txn[], months?: string[]): TrendPoint[] {
   });
 }
 
-export function groupSeries(txns: Txn[], months: string[]): { month: string; [group: string]: number | string }[] {
+export function groupSeries(
+  txns: Txn[],
+  months: string[],
+): { month: string; [group: string]: number | string }[] {
   const rows = countable(txns).filter((t) => t.amount < 0 && !isOneOff(t));
   return months.map((month) => {
     const point: { month: string; [group: string]: number | string } = { month };
     for (const t of rows.filter((r) => r.month === month)) {
       const group = getCategory(t.categoryId)?.group ?? "Other";
-      point[group] = Number(((point[group] as number | undefined ?? 0) + Math.abs(t.amount)).toFixed(2));
+      point[group] = Number(
+        (((point[group] as number | undefined) ?? 0) + Math.abs(t.amount)).toFixed(2),
+      );
     }
     return point;
   });

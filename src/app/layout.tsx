@@ -3,7 +3,11 @@ import { Archivo, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 
 const display = Archivo({ variable: "--font-display", subsets: ["latin"] });
-const mono = IBM_Plex_Mono({ variable: "--font-mono", weight: ["400", "500", "600"], subsets: ["latin"] });
+const mono = IBM_Plex_Mono({
+  variable: "--font-mono",
+  weight: ["400", "500", "600"],
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
   title: "Household",

@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE, SESSION_MAX_AGE, checkPassword, createSessionToken, isConfigured } from "@/lib/auth";
+import {
+  SESSION_COOKIE,
+  SESSION_MAX_AGE,
+  checkPassword,
+  createSessionToken,
+  isConfigured,
+} from "@/lib/auth";
 
 export const runtime = "nodejs";
 

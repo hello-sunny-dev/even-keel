@@ -24,7 +24,10 @@ function monthlyRate(annualRate: number): number {
 }
 
 /** Future value of a starting balance plus a level monthly contribution. */
-export function futureValue(plan: Pick<SavingsPlan, "monthlyAmount" | "annualRate" | "startingBalance">, months: number): number {
+export function futureValue(
+  plan: Pick<SavingsPlan, "monthlyAmount" | "annualRate" | "startingBalance">,
+  months: number,
+): number {
   const r = monthlyRate(plan.annualRate);
   if (months <= 0) return plan.startingBalance;
   if (r === 0) return plan.startingBalance + plan.monthlyAmount * months;
@@ -106,7 +109,13 @@ export function projectFromActuals(
     balance = balance * (1 + r) + saved;
     contributed += saved;
     i += 1;
-    points.push({ monthIndex: i, month, balance: round2(balance), contributed: round2(contributed), interest: round2(balance - contributed) });
+    points.push({
+      monthIndex: i,
+      month,
+      balance: round2(balance),
+      contributed: round2(contributed),
+      interest: round2(balance - contributed),
+    });
   }
 
   const last = sorted[sorted.length - 1]?.month;

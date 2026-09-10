@@ -12,7 +12,9 @@ let client: postgres.Sql | null = null;
  */
 export function db(): postgres.Sql {
   if (!DATABASE_URL) {
-    throw new Error("DATABASE_URL is not set — add it to the environment before using the database.");
+    throw new Error(
+      "DATABASE_URL is not set — add it to the environment before using the database.",
+    );
   }
   client ??= postgres(DATABASE_URL, {
     max: 3,

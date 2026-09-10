@@ -1,13 +1,13 @@
 # Even Keel — implementation plan
 
-> **Even Keel** · *Net worth for two*
+> **Even Keel** · _Net worth for two_
 > Revised after an adversarial review; findings verified against the prototype code.
 
 ## Context
 
 Two partners want one question answered every month: **are we on track to grow our
 assets?** The spreadsheet this replaces couldn't answer it — no macros, so "one-off vs
-recurring" was faked with category *names*, the per-month one-off log was rebuilt by
+recurring" was faked with category _names_, the per-month one-off log was rebuilt by
 hand, and bimonthly bills quietly skewed trailing averages.
 
 The framing behind the project: in a couple one person plays **offense** (investing)
@@ -21,19 +21,19 @@ Data minimization is a build requirement, not a later hardening pass.
 
 ## Decisions taken
 
-| | Decision |
-|---|---|
-| Name | **Even Keel**, tagline *Net worth for two*. repo + package `even-keel`. |
-| Repo | New **private** repo — Lab is a portfolio repo that may go public. |
-| Existing code | **Keep** as a starting point, but **fix the four bugs below first** — the review found real defects in it. |
-| Database | Hosted Postgres in production (Supabase/Neon) + **PGlite** for tests. |
-| Goals | **Two** — cash savings and net worth. |
-| Entry | CSV → PDF → single transaction → whole month, in that order of preference. |
-| Assets / super | Hand-entered monthly balance snapshots. |
+|                 | Decision                                                                                                                                    |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Name            | **Even Keel**, tagline _Net worth for two_. repo + package `even-keel`.                                                                     |
+| Repo            | New **private** repo — Lab is a portfolio repo that may go public.                                                                          |
+| Existing code   | **Keep** as a starting point, but **fix the four bugs below first** — the review found real defects in it.                                  |
+| Database        | Hosted Postgres in production (Supabase/Neon) + **PGlite** for tests.                                                                       |
+| Goals           | **Two** — cash savings and net worth.                                                                                                       |
+| Entry           | CSV → PDF → single transaction → whole month, in that order of preference.                                                                  |
+| Assets / super  | Hand-entered monthly balance snapshots.                                                                                                     |
 | Future-proofing | Full schema (households, users, currency, FX, transfers, investments); **conversion math deferred behind a DB constraint**, not half-built. |
-| Auth | Per-person login — but **after** something usable exists. |
-| AI | Off by default. Never in the parsing path. |
-| Docs | `docs/PRD.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `RUNBOOK.md` — committed first. |
+| Auth            | Per-person login — but **after** something usable exists.                                                                                   |
+| AI              | Off by default. Never in the parsing path.                                                                                                  |
+| Docs            | `docs/PRD.md`, `ARCHITECTURE.md`, `DECISIONS.md`, `RUNBOOK.md` — committed first.                                                           |
 
 ---
 
@@ -53,12 +53,12 @@ in the DB, assert `oneOffSpent` moves.
 
 **B2 — the fingerprint breaks in two ways.**
 `transactionFingerprint` is `date|DESCRIPTION|amount` (`statement.ts:247`).
-*(a)* The confirm table lets the user correct a misparsed amount or date; the corrected
+_(a)_ The confirm table lets the user correct a misparsed amount or date; the corrected
 row gets a different fingerprint, so re-importing the same PDF inserts the original
 values again as a "new" row. Silent double-count — the exact failure the fingerprint
 exists to stop. → Fingerprint is computed from the **parsed** values and stored as
 `source_fingerprint`; user edits change `txn_date`/`amount` but never the fingerprint.
-*(b)* Two genuinely identical rows on one day (two $4.49 Apple charges) share a
+_(b)_ Two genuinely identical rows on one day (two $4.49 Apple charges) share a
 fingerprint and `on conflict do nothing` silently drops one. → Append an occurrence
 index within the statement (`…|#2`), and include the running balance when present.
 Both get tests.
@@ -93,11 +93,11 @@ client; a year fallback becomes a warning the confirm table must acknowledge.
   row so restatement is explicit. `fx_rates.rate` is `numeric(18,8)` — KRW→AUD is
   ~0.0011 and would round to zero at 4dp — with the `base→quote` direction documented.
 - **Dates**: strings, never `Date`, across the wire and the DB boundary.
-- **Gaps in balances**: gain/loss is computed only between two *actual* snapshots, with
+- **Gaps in balances**: gain/loss is computed only between two _actual_ snapshots, with
   contributions summed across the span. A carried-forward month renders as `estimated`,
   not as a number — otherwise skipping July turns a $500 contribution into a $500 "loss"
   and an $500 phantom gain in August.
-- **Month-granularity rows** appear in the one-off log tagged *(month total)*; they are
+- **Month-granularity rows** appear in the one-off log tagged _(month total)_; they are
   excluded from the transaction **ledger** only. Otherwise the dashboard's one-off total
   and the one-off page disagree.
 
@@ -195,8 +195,7 @@ in. So multi-file import is what makes the recurring math mean anything.
    whole batch, not one file of five.
 
 **Cadence is detected, not declared.** With history, intervals between charges from the
-same merchant give it away: take the median gap in days and snap to 14 / 30 / 61 / 91 /
-365. The user's manual override stays, but it stops being the only source.
+same merchant give it away: take the median gap in days and snap to 14 / 30 / 61 / 91 / 365. The user's manual override stays, but it stops being the only source.
 
 ## Fortnightly breaks `cadence_months`, and it breaks the month scoring too
 
@@ -221,18 +220,18 @@ scenario verdict carries the annotation).
 
 ## Screens
 
-| Route | Content |
-|---|---|
-| `/login` | **Even Keel · Net worth for two.** Two seeded accounts. No registration, ever. |
-| `/` **Dashboard** | Period selector (year + month). Goal strip (cash + net worth, % there, expected-by-now marker, on-track pill, sparkline). **Defense / Offense band.** **12-month bar strip** — height = saved, green cleared / red short; the chart *is* the navigation. Income / spent / actual saved → **scenario ladder** (all three) → category breakdown. **First-run state** when there is no data: three steps (set goals → add accounts + balances → import). |
-| `/transactions` | **The ledger.** Month filter, text search, tap to edit category / one-off / kind, multi-select → bulk assign, delete, undo. Without this, month 3 is "it tagged 40 things wrong and I can fix them one at a time from a queue." |
-| `/add` | **CSV** (if it exports CSV) → **PDF** → **one transaction** → **whole month**. CSV and PDF accept **several files at once**, uploaded one request each, merged into one editable confirm table with a source column, deduped across files, with the balance-chaining check reported before Import. Nothing is written until Import, and the batch shares one `upload_id` so undo is one action. The month form pre-fills last month's value per row with a "same as last month" action, and shows only categories with history plus "+ other". |
-| `/review` | Tagging queue. On tag: *"Apply to 6 other transactions from WOOLWORTHS?"* (default yes) — one `update … where merchant_key = $1`. Split into parts. |
-| `/one-offs` | One-off costs for the month, month-total rows included and labelled. |
-| `/trends` | Income vs recurring; recurring by group; cumulative net cash flow; cash projection. |
-| `/goals` | Both goals editable; three scenarios; category settings including **merge into…** and rename. |
-| `/assets` | Net worth + Available / Invested / Locked; accounts with hand-entered balances and derived gain/loss; net worth over time. |
-| `/settings` | Password change, display currency, locale, accounts. |
+| Route             | Content                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/login`          | **Even Keel · Net worth for two.** Two seeded accounts. No registration, ever.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `/` **Dashboard** | Period selector (year + month). Goal strip (cash + net worth, % there, expected-by-now marker, on-track pill, sparkline). **Defense / Offense band.** **12-month bar strip** — height = saved, green cleared / red short; the chart _is_ the navigation. Income / spent / actual saved → **scenario ladder** (all three) → category breakdown. **First-run state** when there is no data: three steps (set goals → add accounts + balances → import).                                                                                          |
+| `/transactions`   | **The ledger.** Month filter, text search, tap to edit category / one-off / kind, multi-select → bulk assign, delete, undo. Without this, month 3 is "it tagged 40 things wrong and I can fix them one at a time from a queue."                                                                                                                                                                                                                                                                                                                |
+| `/add`            | **CSV** (if it exports CSV) → **PDF** → **one transaction** → **whole month**. CSV and PDF accept **several files at once**, uploaded one request each, merged into one editable confirm table with a source column, deduped across files, with the balance-chaining check reported before Import. Nothing is written until Import, and the batch shares one `upload_id` so undo is one action. The month form pre-fills last month's value per row with a "same as last month" action, and shows only categories with history plus "+ other". |
+| `/review`         | Tagging queue. On tag: _"Apply to 6 other transactions from WOOLWORTHS?"_ (default yes) — one `update … where merchant_key = $1`. Split into parts.                                                                                                                                                                                                                                                                                                                                                                                            |
+| `/one-offs`       | One-off costs for the month, month-total rows included and labelled.                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `/trends`         | Income vs recurring; recurring by group; cumulative net cash flow; cash projection.                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `/goals`          | Both goals editable; three scenarios; category settings including **merge into…** and rename.                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `/assets`         | Net worth + Available / Invested / Locked; accounts with hand-entered balances and derived gain/loss; net worth over time.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `/settings`       | Password change, display currency, locale, accounts.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 
 **Mobile is the primary device**, so navigation is a **bottom tab bar of four** — Home,
 Add, Review, More — with the rest under More. A seven-item horizontally scrolling pill
@@ -253,7 +252,7 @@ decoration and two households collide on a shared merchant.
 - **`categories`** — `name, group, kind, one_off, cadence_unit ('day'|'week'|'month'), cadence_count, target_monthly, confirmed_monthly_rate, archived`. Archived categories stay **loadable for display** so old rows keep their name.
 - **`rules`** — `pattern, category_id, match_type, source, priority`
 - **`transactions`** — `txn_date, month, description, merchant_key, amount, currency, balance, kind ('income'|'expense'|'transfer'), transfer_account_id, category_id, one_off_override, needs_review, source ('csv'|'pdf'|'manual'), granularity ('transaction'|'month'), source_fingerprint, upload_id, deleted_at, split_parent_id, is_split_parent`
-- **`uploads`** — `uploaded_at, kind, file_count, parsed_count, inserted_count, skipped_count`. One row per *batch*, not per file; `upload_id` on transactions makes **"undo this import"** a single soft-delete by id. No filenames.
+- **`uploads`** — `uploaded_at, kind, file_count, parsed_count, inserted_count, skipped_count`. One row per _batch_, not per file; `upload_id` on transactions makes **"undo this import"** a single soft-delete by id. No filenames.
 - **`accounts`** — `name, kind ('cash'|'investment'|'super'|'property'|'loan'), owner_user_id, currency, bucket ('available'|'invested'|'locked')`. Loan balances are stored **as amount owed, positive**, negated by kind — stated in the form label and a check constraint, because otherwise the two of them will enter it opposite ways.
 - **`balances`** — `account_id, month, amount`, unique `(account_id, month)`
 - **`goals`** — `kind ('cash'|'net_worth'), target_amount, target_months, opening_balance, annual_rate, active`
@@ -262,7 +261,7 @@ decoration and two households collide on a shared merchant.
 
 **Cash goal has one authority: the balance snapshot.** The ledger's cumulative
 `actualSaved` will differ every month by timing and by anything off the imported
-account, so it is shown as *"explained by transactions: $X of $Y"*, never as a rival total.
+account, so it is shown as _"explained by transactions: $X of $Y"_, never as a rival total.
 
 **Import is one transaction**, and the server re-validates every client-edited row
 (finite amount, valid date, existing category) and recomputes duplicates itself. It
@@ -276,7 +275,7 @@ The previous ordering front-loaded four commits of infrastructure before anythin
 Reordered so the riskiest unknown is hit first and the two of them can use it early.
 
 1. **Scaffold + docs + `scripts/dump-pdf.mjs`.** Prettier, ESLint, hooks, CI skeleton,
-   `docs/*`. Fix **B4** (dates). *Jamie runs the dump script on a real statement.*
+   `docs/*`. Fix **B4** (dates). _Run the dump script on a real statement._
 2. **Parser hardening from what the dump shows** — font-size-relative gap, reconciliation
    check, warnings surfaced. Fix **B2** (fingerprint). CSV importer if the bank exports CSV.
    Cadence model (`cadence_unit`/`cadence_count`) and median-gap detection.
@@ -330,18 +329,18 @@ Beyond the suite already planned (redaction, statement parsing, PDF fixture,
 categorization, hand-calculated month aggregates, scenarios, goals, net worth, savings
 math, the five spreadsheet regressions, auth), the review adds:
 
-| Test | Asserts |
-|---|---|
-| `categories-db.test.ts` | Flipping `one_off` in the DB moves `oneOffSpent` — **B1** |
-| `fingerprint.test.ts` | Editing an amount in the confirm table does not create a re-import duplicate; two identical same-day charges both survive — **B2** |
-| `kind.test.ts` | A refund in an expense category reduces that category's spend and does not raise income — **B3** |
-| `timezone.test.ts` | Month bucketing and `toTxn` are identical under `TZ=Australia/Perth`, `Asia/Seoul` and `UTC` — **B4** |
-| `db-port.test.ts` | `typeof` of numeric/date/count identical on postgres.js and PGlite; a transaction callback using the outer handle is rejected |
-| `import-atomic.test.ts` | A failure mid-import leaves zero rows; undo by `upload_id` restores the prior state including replaced month rows |
-| `balance-gaps.test.ts` | A skipped month does not produce a phantom loss then a phantom gain |
-| `currency-guard.test.ts` | Inserting a non-display-currency transaction is rejected by the DB |
-| `retro-tag.test.ts` | Tagging a merchant updates its untagged history |
-| `empty-state.test.ts` | Every page renders with zero transactions, no plan and no accounts |
+| Test                     | Asserts                                                                                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `categories-db.test.ts`  | Flipping `one_off` in the DB moves `oneOffSpent` — **B1**                                                                          |
+| `fingerprint.test.ts`    | Editing an amount in the confirm table does not create a re-import duplicate; two identical same-day charges both survive — **B2** |
+| `kind.test.ts`           | A refund in an expense category reduces that category's spend and does not raise income — **B3**                                   |
+| `timezone.test.ts`       | Month bucketing and `toTxn` are identical under `TZ=Australia/Perth`, `Asia/Seoul` and `UTC` — **B4**                              |
+| `db-port.test.ts`        | `typeof` of numeric/date/count identical on postgres.js and PGlite; a transaction callback using the outer handle is rejected      |
+| `import-atomic.test.ts`  | A failure mid-import leaves zero rows; undo by `upload_id` restores the prior state including replaced month rows                  |
+| `balance-gaps.test.ts`   | A skipped month does not produce a phantom loss then a phantom gain                                                                |
+| `currency-guard.test.ts` | Inserting a non-display-currency transaction is rejected by the DB                                                                 |
+| `retro-tag.test.ts`      | Tagging a merchant updates its untagged history                                                                                    |
+| `empty-state.test.ts`    | Every page renders with zero transactions, no plan and no accounts                                                                 |
 
 E2E journeys: sign in; import with edits and exclusions; re-import shows all duplicates;
 tag + retroactive apply; split; scenario switch flips March to short; bar-strip

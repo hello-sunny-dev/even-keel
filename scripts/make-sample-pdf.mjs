@@ -11,7 +11,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
-const OUT = resolve(dirname(fileURLToPath(import.meta.url)), "../test-fixtures/sample/sample-statement.pdf");
+const OUT = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  "../test-fixtures/sample/sample-statement.pdf",
+);
 
 const OPENING_BALANCE = 5000.0;
 
@@ -70,12 +73,24 @@ async function build() {
   let y = TOP;
 
   const put = (text, x, opts = {}) =>
-    page.drawText(text, { x, y, size: opts.size ?? SIZE, font: opts.bold ? bold : font, color: rgb(0.1, 0.1, 0.1) });
+    page.drawText(text, {
+      x,
+      y,
+      size: opts.size ?? SIZE,
+      font: opts.bold ? bold : font,
+      color: rgb(0.1, 0.1, 0.1),
+    });
 
   const right = (text, x, opts = {}) => {
     const f = opts.bold ? bold : font;
     const size = opts.size ?? SIZE;
-    page.drawText(text, { x: x - f.widthOfTextAtSize(text, size), y, size, font: f, color: rgb(0.1, 0.1, 0.1) });
+    page.drawText(text, {
+      x: x - f.widthOfTextAtSize(text, size),
+      y,
+      size,
+      font: f,
+      color: rgb(0.1, 0.1, 0.1),
+    });
   };
 
   const newPageIfNeeded = () => {

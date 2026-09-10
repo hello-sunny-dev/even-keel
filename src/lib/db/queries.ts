@@ -1,5 +1,6 @@
 import "server-only";
 import type { Txn } from "../aggregate";
+import { dateFromDriver } from "../dates";
 import { CATEGORIES, type Category } from "../categories";
 import type { Rule, RuleMatchType, RuleSource } from "../rules";
 import type { SavingsPlan } from "../savings";
@@ -31,7 +32,9 @@ export async function listCategories(): Promise<StoredCategory[]> {
   }));
 }
 
-export async function upsertCategory(c: Partial<StoredCategory> & { id: string; name: string; group: Category["group"] }) {
+export async function upsertCategory(
+  c: Partial<StoredCategory> & { id: string; name: string; group: Category["group"] },
+) {
   await db()`
     insert into categories (id, name, "group", kind, one_off, cadence_months, target_monthly, confirmed_monthly_rate)
     values (${c.id}, ${c.name}, ${c.group}, ${c.kind ?? "expense"}, ${c.oneOff ?? false},
@@ -48,7 +51,12 @@ export async function upsertCategory(c: Partial<StoredCategory> & { id: string; 
 
 export async function setCategorySettings(
   id: string,
-  patch: { targetMonthly?: number | null; confirmedMonthlyRate?: number | null; cadenceMonths?: number; oneOff?: boolean },
+  patch: {
+    targetMonthly?: number | null;
+    confirmedMonthlyRate?: number | null;
+    cadenceMonths?: number;
+    oneOff?: boolean;
+  },
 ) {
   const sql = db();
   if (patch.targetMonthly !== undefined) {
@@ -104,7 +112,8 @@ export async function deleteRule(id: string) {
 }
 
 function toTxn(r: Record<string, unknown>): Txn {
-  const date = r.txn_date instanceof Date ? r.txn_date.toISOString().slice(0, 10) : String(r.txn_date).slice(0, 10);
+  // `toISOString()` here would move the day backwards east of UTC.
+  const date = dateFromDriver(r.txn_date);
   return {
     id: String(r.id),
     date,
@@ -118,7 +127,11 @@ function toTxn(r: Record<string, unknown>): Txn {
   };
 }
 
-export type TxnRow = Txn & { merchantKey: string; balance: number | null; splitParentId: string | null };
+export type TxnRow = Txn & {
+  merchantKey: string;
+  balance: number | null;
+  splitParentId: string | null;
+};
 
 function toTxnRow(r: Record<string, unknown>): TxnRow {
   return {
@@ -184,8 +197,16 @@ export async function insertTransactions(rows: InsertableTransaction[]): Promise
         needs_review: r.needsReview,
         fingerprint: r.fingerprint,
       })),
-      "txn_date", "month", "description", "merchant_key", "amount", "balance",
-      "category_id", "one_off_override", "needs_review", "fingerprint",
+      "txn_date",
+      "month",
+      "description",
+      "merchant_key",
+      "amount",
+      "balance",
+      "category_id",
+      "one_off_override",
+      "needs_review",
+      "fingerprint",
     )}
     on conflict do nothing
     returning id`;
