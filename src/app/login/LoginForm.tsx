@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Field } from "@/components/AuthShell";
 
 export function LoginForm({ next }: { next: string }) {
   const router = useRouter();
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -14,10 +16,10 @@ export function LoginForm({ next }: { next: string }) {
     setBusy(true);
     setError(null);
 
-    const response = await fetch("/api/login", {
+    const response = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ email, password }),
     });
 
     if (response.ok) {
@@ -27,33 +29,37 @@ export function LoginForm({ next }: { next: string }) {
     }
 
     const body = await response.json().catch(() => ({}));
+    // What was typed stays: a typo should cost one character, not the lot.
     setError(body.error ?? "Something went wrong.");
-    // Leave what was typed in place. Clearing it means retyping the whole
-    // thing to fix one character.
     setBusy(false);
   }
 
   return (
     <form onSubmit={submit} className="space-y-3">
-      <input
+      <Field
+        label="Email"
+        type="email"
+        value={email}
+        autoFocus
+        autoComplete="username"
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <Field
+        label="Password"
         type="password"
         value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="••••••••"
-        aria-label="Password"
-        autoFocus
         autoComplete="current-password"
-        className="border-rule-strong bg-sheet w-full rounded-lg border px-3 py-2 text-center tracking-[0.3em]"
+        onChange={(e) => setPassword(e.target.value)}
       />
       <button
         type="submit"
-        disabled={busy || password.length === 0}
+        disabled={busy || !email || !password}
         className="bg-ink text-paper w-full rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-40"
       >
-        {busy ? "Checking…" : "Unlock"}
+        {busy ? "Checking…" : "Sign in"}
       </button>
       {error && (
-        <p className="text-center text-sm" style={{ color: "var(--fail)" }} role="alert">
+        <p className="text-sm" style={{ color: "var(--fail)" }} role="alert">
           {error}
         </p>
       )}

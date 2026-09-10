@@ -14,13 +14,14 @@ const ITEMS = [
   { href: "/add", label: "Add" },
   { href: "/transactions", label: "Ledger" },
   { href: "/review", label: "Review" },
+  { href: "/settings", label: "Settings" },
 ];
 
 export function Nav() {
   const pathname = usePathname();
 
   // Nothing to navigate to until you are through the gate.
-  if (pathname === "/login") return null;
+  if (["/login", "/start", "/join"].includes(pathname)) return null;
 
   return (
     <nav className="border-rule bg-paper/95 fixed inset-x-0 bottom-0 z-20 border-t backdrop-blur sm:static sm:border-t-0 sm:border-b sm:bg-transparent sm:backdrop-blur-none">

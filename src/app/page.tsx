@@ -3,7 +3,7 @@ import { Empty, Heading, Money, Note } from "@/components/ui";
 import { availableMonths, categoryBreakdown, monthlySummary, type Txn } from "@/lib/aggregate";
 import { listCategories, listTransactions } from "@/lib/db/queries";
 import { formatMonth } from "@/lib/months";
-import { household } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ export default async function Dashboard({
 }: {
   searchParams: Promise<{ month?: string }>;
 }) {
-  const { db, household: id } = await household();
+  const { db, household: id } = await requireSession();
   const [rows, categories] = await Promise.all([listTransactions(db, id), listCategories(db, id)]);
 
   const txns: Txn[] = rows;

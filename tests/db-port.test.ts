@@ -113,6 +113,8 @@ describe("transactions", () => {
 
 describe("migrations", () => {
   it("apply once and are recorded", async () => {
+    const { join } = await import("node:path");
+    const { readdir } = await import("node:fs/promises");
     const { db } = await freshDb();
     open = db;
 
@@ -120,7 +122,14 @@ describe("migrations", () => {
       "select name from schema_migrations order by name",
     );
 
-    expect(names.map((r) => r.name)).toEqual(["001_initial.sql", "002_currency_guard.sql"]);
+    // Named against the directory rather than a hand-written list: adding a
+    // migration should not need this test edited, only the runner to still
+    // apply every file it finds, in order.
+    const files = (await readdir(join(process.cwd(), "db", "migrations")))
+      .filter((f) => f.endsWith(".sql"))
+      .sort();
+    expect(files.length).toBeGreaterThan(0);
+    expect(names.map((r) => r.name)).toEqual(files);
   });
 
   it("are a no-op the second time", async () => {

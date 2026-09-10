@@ -103,6 +103,8 @@ two drivers agree on types, because they do not by default.
 
 ### 9. A shared password first, per-person accounts later
 
+**Superseded by 11.** Accounts arrived earlier than commit 10 and there was never a shared password in a running build.
+
 **Why.** Two people and a private URL. Per-person login is in the schema from the start
 (`users`, `session_version`) because retrofitting it means rewriting every query, but
 building the login screens before anything is usable would delay the first useful month
@@ -119,3 +121,36 @@ password change. `household_id` is on every table from the first migration regar
 not belong in a shared experiments repository.
 
 **Consequence.** It lives in its own repository, with real statements kept out of git.
+
+---
+
+### 11. Invited accounts, never open registration
+
+**Why.** One person opens the app, a partner joins the same household, and a few friends might later
+get their own. That is three needs, and only the middle one is "share everything". Open
+sign-up would answer none of them and would put a registration form on a private URL, where
+the only people who can find it are strangers.
+
+**Consequence.** `/start` creates the first account and then closes itself, so there is no
+sign-up route left to find. Every later account comes from an invite of one of two kinds:
+`join` carries a `household_id` and shares all figures; `new_household` carries none and
+shares nothing. A database check keeps those two honest —
+`check ((kind = 'join') = (household_id is not null))` — so an invite cannot be half of each.
+Invites are single-use, expiring and revocable.
+
+**Also considered.** An allow-list of email addresses. Rejected: it needs editing by hand in
+the database for every new person, and it still needs a way for them to set a password.
+
+---
+
+### 12. The session version lives inside the token
+
+**Why.** The proxy gates every route and runs on the edge, where postgres.js cannot reach.
+Checking a session against the database on every request was therefore not available, and
+signing a token that can never be revoked was not acceptable.
+
+**Consequence.** The token carries `userId` and the `session_version` it was issued with.
+The proxy verifies signature and expiry only; pages and writes re-read the account and
+compare versions. A password change bumps the column and strands every other device — which
+is the property that mattered — at the cost of a revocation taking effect on the next
+request that reaches the database rather than instantly at the edge.

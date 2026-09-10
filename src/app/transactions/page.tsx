@@ -1,12 +1,12 @@
 import { Empty, Heading, Money } from "@/components/ui";
 import { getCategory } from "@/lib/categories";
 import { listTransactions } from "@/lib/db/queries";
-import { household } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function Ledger({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { db, household: id } = await household();
+  const { db, household: id } = await requireSession();
   const search = (await searchParams).q ?? "";
   const rows = await listTransactions(db, id, { search: search || undefined, limit: 500 });
 

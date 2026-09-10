@@ -1,12 +1,12 @@
 import { Importer } from "./Importer";
 import { Heading, Note } from "@/components/ui";
 import { listCategories } from "@/lib/db/queries";
-import { household } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function AddPage() {
-  const { db, household: id } = await household();
+  const { db, household: id } = await requireSession();
   const categories = await listCategories(db, id);
 
   return (

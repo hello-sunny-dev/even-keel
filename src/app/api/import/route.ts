@@ -12,7 +12,7 @@ import {
 import { extractPdfLines } from "@/lib/parse/pdf";
 import { parseStatementText } from "@/lib/parse/statement";
 import { insertTransactions, listUserRules, recordUpload, finishUpload } from "@/lib/db/queries";
-import { household } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const { db, household: id } = await household();
+  const { db, household: id } = await requireSession();
   const rules = await listUserRules(db, id);
 
   // The bytes stay in memory and go out of scope with this request. They are
@@ -80,7 +80,7 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Nothing to import." }, { status: 400 });
   }
 
-  const { db, household: id } = await household();
+  const { db, household: id } = await requireSession();
   const rows = toInsertable(body.rows, "pdf");
 
   // The client's counts are a display; the server decides what actually lands.

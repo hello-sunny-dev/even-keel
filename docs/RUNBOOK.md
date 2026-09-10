@@ -64,9 +64,37 @@ Vercel, from the repository. Set in the project's environment variables:
 | ---------------- | -------------------------------------------------- |
 | `DATABASE_URL`   | Postgres connection string                         |
 | `SESSION_SECRET` | Long random string; changing it signs everyone out |
-| `APP_PASSWORD`   | Shared password, until per-person accounts land    |
 
 Secrets live in Vercel and in `.env.local`, never in the repository.
+
+## Accounts
+
+The first visit to a database with no accounts offers `/start`, which creates the first
+account and the household it keeps, then closes itself. Everyone after that arrives through
+an invite made under **Settings → Invite** — _join this household_ shares every figure,
+_start their own_ shares nothing. Each link works once and expires.
+
+**Locked out.** There is no password reset by email; with two people, it is a database
+statement. Either hand a new hash to the account:
+
+```sql
+-- Generate the hash first:
+--   npx tsx -e "import('./src/lib/auth-server').then(m => m.hashPassword('new passphrase')).then(console.log)"
+update users
+   set password_hash = 'scrypt$...',
+       session_version = session_version + 1
+ where lower(email) = lower('jamie@example.com');
+```
+
+…or, if nobody can get in at all, delete the accounts so `/start` reopens. The household and
+every transaction survive; only the sign-ins are removed:
+
+```sql
+delete from users where household_id = (select id from households limit 1);
+```
+
+Bumping `session_version` is what signs the other devices out. Do it deliberately after any
+recovery, since anyone still holding an old cookie stays signed in until it changes.
 
 ## Checks
 

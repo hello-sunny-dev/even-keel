@@ -100,6 +100,28 @@ to hide, none of which a naive test would catch:
 - **Bulk insert.** postgres.js's array helper does not exist through `sql.unsafe`;
   inserts go through `unnest($1::date[], $2::numeric[], …)`, which works on both.
 
+## Accounts and sessions
+
+Two modules, because they run in two places. `lib/auth.ts` runs in the edge proxy as well
+as on the server, so it uses Web Crypto and never touches the database; `lib/auth-server.ts`
+is Node-only and owns scrypt, account lookup and invites.
+
+A session token is `userId.version.expires.hmac`. Carrying the version inside the token is
+what lets the proxy gate every route without a database round trip: it verifies the
+signature and the expiry, and the version is re-checked against `users.session_version`
+wherever the database is reachable. Changing a password bumps that column, and every token
+issued before it stops working — which is how one device signs the others out.
+
+There is no registration route. `/start` creates the first account and the household it
+keeps, then refuses once any account exists; everyone after that arrives through an invite,
+which is either _join this household_ (shared figures) or _start your own_ (nothing
+shared). Single-use, expiring, revocable.
+
+Sign-in failures are counted in `login_attempts` rather than in memory, because a serverless
+instance is recycled between requests and an in-memory counter would protect nothing while
+passing its own test. Verification runs scrypt even for an address with no account, so how
+long the answer takes does not say who is registered.
+
 ## Seams left open on purpose
 
 - `parseStatementText` takes an options object — where a per-bank parsing profile would

@@ -1,11 +1,11 @@
 import { Empty, Heading, Money } from "@/components/ui";
 import { listTransactions } from "@/lib/db/queries";
-import { household } from "@/lib/session";
+import { requireSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 export default async function Review() {
-  const { db, household: id } = await household();
+  const { db, household: id } = await requireSession();
   const queue = await listTransactions(db, id, { needsReview: true, limit: 200 });
 
   return (
