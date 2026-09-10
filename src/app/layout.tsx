@@ -15,6 +15,8 @@ export const metadata: Metadata = {
   description: "Net worth for two.",
   // Nothing here should ever be indexed.
   robots: { index: false, follow: false, nocache: true },
+  icons: { icon: "/icon.svg", apple: "/icon-192.png" },
+  appleWebApp: { capable: true, title: "Even Keel", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = {

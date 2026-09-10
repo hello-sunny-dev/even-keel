@@ -47,10 +47,25 @@ export async function db(): Promise<Db> {
   const existing = cached();
   if (existing) return existing;
 
-  const next = DATABASE_URL
-    ? (await import("./postgres")).createPostgresDb(DATABASE_URL)
-    : createPgliteDb(process.env.PGLITE_DIR || DEV_PGLITE_DIR);
+  if (DATABASE_URL) {
+    const next = (await import("./postgres")).createPostgresDb(DATABASE_URL);
+    remember(next);
+    return next;
+  }
 
+  // PGlite is not a deployment target, and falling back to it in production is
+  // worse than failing: a serverless filesystem does not survive between
+  // requests, so the app would appear to work and lose everything on the next
+  // cold start. Setting PGLITE_DIR is how somebody says they meant it — a
+  // production build being smoke-tested on one machine, and nothing else.
+  if (process.env.NODE_ENV === "production" && !process.env.PGLITE_DIR) {
+    throw new Error(
+      "DATABASE_URL is not set. A production build needs real Postgres; " +
+        "set PGLITE_DIR as well only if a local, disposable database is what you meant.",
+    );
+  }
+
+  const next = createPgliteDb(process.env.PGLITE_DIR || DEV_PGLITE_DIR);
   remember(next);
   return next;
 }

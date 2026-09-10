@@ -44,4 +44,7 @@ next-env.d.ts
 # The folder is kept so the local-only fixture tests have somewhere to look.
 /test-fixtures/real/*
 !/test-fixtures/real/.gitkeep
-.pglite/
+# Any local PGlite database, whatever it is called. A smoke test of a
+# production build uses its own directory, and one of these is 39MB of
+# somebody's real figures.
+.pglite*/

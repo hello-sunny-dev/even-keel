@@ -41,20 +41,54 @@ machine; CI skips the tests that need them.
 ## A real database, when it is time to deploy
 
 PGlite is not a deployment target: a serverless filesystem does not persist between
-requests, so on Vercel the directory would be empty every time. Anything hosted needs real
-Postgres — Supabase and Neon both have a free tier sufficient for two people.
+requests, so on Vercel the directory would be empty every time. A production build refuses
+to fall back to it — better a startup error than an app that appears to work and loses
+everything on the next cold start.
 
-```bash
-# 1. Create the project yourself and copy the connection string
-# 2. Put it in .env.local as DATABASE_URL — never in the repository
-# 3. Apply the schema
-npm run db:setup
-```
+**The connection string is a credential.** It belongs in `.env.local` on your machine and
+in Vercel's environment variables in production, and nowhere else: not in the repository,
+not in a commit message, not pasted into a chat. Nobody needs to see it to work on this.
 
-The connection string is a credential. It belongs in `.env.local` locally and in Vercel's
-environment variables in production, and nowhere else — not in the repository, not in a
-chat, not in a commit message. Setting it is the only change needed: the same SQL runs on
-both, through the `Db` port.
+### Supabase, step by step
+
+1. **New project.** Any region; `ap-southeast-2` (Sydney) is nearest. Save the database
+   password it generates — Supabase will not show it again.
+2. **Connect → Connection string → Transaction pooler.** Take that one, not "Direct
+   connection". It looks like:
+
+   ```
+   postgresql://postgres.<ref>:<password>@aws-0-ap-southeast-2.pooler.supabase.com:6543/postgres
+   ```
+
+   Port **6543** is the pooler; 5432 is the database itself. A Vercel function runs per
+   request, and direct connections would run out. The app detects a pooled URL and turns
+   off prepared statements, which a transaction-mode pooler cannot keep — without that it
+   works in testing and fails the moment two requests overlap.
+
+3. **Apply the schema**, from your machine, with that string in `.env.local`:
+
+   ```bash
+   npm run db:setup
+   ```
+
+4. **Vercel**: import the repository, and set `DATABASE_URL` and `SESSION_SECRET` in the
+   project's environment variables. Generate the secret with:
+
+   ```bash
+   node -e "console.log(crypto.randomUUID() + crypto.randomUUID())"
+   ```
+
+5. **First visit** offers to create the first account. Everyone after that arrives by
+   invite, from Settings.
+
+Nothing else changes: the same SQL runs on PGlite and on Postgres through the `Db` port.
+
+### While you are in the Supabase dashboard
+
+- **Database → Backups**: turn on point-in-time recovery if the plan allows it.
+- **Authentication**: unused. Accounts live in this app's own `users` table.
+- **API keys**: unused. Nothing reaches Supabase except Postgres over the connection string,
+  so the anon and service keys never need to leave the dashboard.
 
 Enable **point-in-time recovery** on the hosted database. Once a month, also take a local
 copy — a provider account is a single point of failure:
@@ -73,10 +107,11 @@ pg_restore --no-owner --dbname "$DATABASE_URL" even-keel-YYYY-MM-DD.dump
 
 Vercel, from the repository. Set in the project's environment variables:
 
-| Variable         | What it is                                         |
-| ---------------- | -------------------------------------------------- |
-| `DATABASE_URL`   | Postgres connection string                         |
-| `SESSION_SECRET` | Long random string; changing it signs everyone out |
+| Variable         | What it is                                                      |
+| ---------------- | --------------------------------------------------------------- |
+| `DATABASE_URL`   | Postgres connection string — the pooled one, port 6543          |
+| `SESSION_SECRET` | Long random string; changing it signs everyone out              |
+| `PGLITE_DIR`     | Only to smoke-test a production build locally. Never in Vercel. |
 
 Secrets live in Vercel and in `.env.local`, never in the repository.
 

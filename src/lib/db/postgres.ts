@@ -2,12 +2,37 @@ import "server-only";
 import postgres from "postgres";
 import type { Db, Row } from "./port";
 
+/**
+ * Is this a connection pooler rather than the database itself?
+ *
+ * It matters because a pooler in transaction mode — Supabase's on port 6543,
+ * Neon's `-pooler` host — hands each statement to whichever backend is free,
+ * so a prepared statement made on one connection is not there on the next.
+ * postgres.js prepares by default, and the failure is
+ * "prepared statement s1 already exists" or "does not exist" under load: it
+ * works in testing and breaks when two requests overlap.
+ *
+ * Serverless needs the pooler — a Vercel function per request would exhaust
+ * direct connections — so the answer is to stop preparing, not to avoid it.
+ */
+export function isPooled(url: string): boolean {
+  const lower = url.toLowerCase();
+  return (
+    lower.includes("pgbouncer=true") ||
+    lower.includes("pooler.supabase.com") ||
+    /-pooler\./.test(lower) ||
+    /:6543(\/|\?|$)/.test(lower)
+  );
+}
+
 /** Hosted Postgres, for production. */
 export function createPostgresDb(url: string): Db {
+  const local = url.includes("localhost") || url.includes("127.0.0.1");
   const sql = postgres(url, {
     max: 3,
     idle_timeout: 20,
-    ssl: url.includes("localhost") || url.includes("127.0.0.1") ? false : "require",
+    ssl: local ? false : "require",
+    prepare: !isPooled(url),
     // Statement text carries merchant names; never let the driver echo
     // parameters into the logs.
     debug: false,
