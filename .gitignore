@@ -44,6 +44,14 @@ next-env.d.ts
 # The folder is kept so the local-only fixture tests have somewhere to look.
 /test-fixtures/real/*
 !/test-fixtures/real/.gitkeep
+
+# Anywhere else real statements plausibly get dropped. `npm run dump -- finance`
+# reads them from here quite happily; git never should, and `git add -A` is one
+# keystroke away from a private repo full of somebody's bank account.
+/finance/
+/statements/
+*.pdf
+!/test-fixtures/sample/*.pdf
 # Any local PGlite database, whatever it is called. A smoke test of a
 # production build uses its own directory, and one of these is 39MB of
 # somebody's real figures.
