@@ -94,16 +94,18 @@ export function itemsToLines(items: TextItem[]): string[] {
 
 export async function extractPdfLines(data: Uint8Array): Promise<string[]> {
   const pdfjs = await loadPdfjs();
-  const doc = await pdfjs.getDocument({
+  // pdfjs 6 moved `destroy` from the document to the loading task, which is
+  // also the only handle that can tear down the worker.
+  const loadingTask = pdfjs.getDocument({
     data,
-    // pdfjs v5 removed `isEvalSupported`; eval is no longer used at all.
     useSystemFonts: false,
     disableFontFace: true,
     standardFontDataUrl: standardFontDataUrl(),
     verbosity: 0,
-  }).promise;
+  });
 
   try {
+    const doc = await loadingTask.promise;
     const lines: string[] = [];
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p);
@@ -116,7 +118,7 @@ export async function extractPdfLines(data: Uint8Array): Promise<string[]> {
     }
     return lines;
   } finally {
-    await doc.destroy();
+    await loadingTask.destroy();
   }
 }
 
