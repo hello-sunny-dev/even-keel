@@ -138,85 +138,33 @@ client; a year fallback becomes a warning the confirm table must acknowledge.
 
 ---
 
-## De-risking the real statement — the actual risk is line assembly, not regexes
+## De-risking the real statement
 
-The tolerance I was relying on lives in `parseStatementText`, which only ever sees lines
-`itemsToLines` already assembled. That function inserts a space when the x-gap exceeds a
-**fixed 0.6 PDF units** (`pdf.ts:59`), independent of font size. Real bank PDFs emit one
-item per word or per glyph cluster with kerning gaps around that threshold, so
-`WOOLWORTHS` can split into `WOOL WORTHS`, or `184.55` into `184 .55` — which then fails
-`AMOUNT_TAIL` and the row is **skipped silently**. A `skipIf(empty)` fixture test is not
-a mitigation; it stays green forever.
+**Partly resolved, and the original claim was wrong.** The plan asserted that
+reassembling PDF glyph runs was the main risk — that `184.55` arriving as `184` and `.55`
+would drop the row in silence. `test-fixtures/sample/fragmented-statement.pdf` reproduces
+that layout deliberately, and it parses identically to the clean fixture: pdfjs merges
+runs and synthesises spaces before `itemsToLines` sees anything. Both fixtures are
+committed and both are asserted equal.
 
-Three fixes, all in the first two commits:
+What remains is narrower but still real: an unknown _layout_. A bank that puts the
+running balance in a different column, wraps descriptions differently, or omits the
+opening balance line will still defeat the line-shape assumptions in
+`parseStatementText`. Nothing in the repository can catch that without a real file.
 
-1. `scripts/dump-pdf.mjs <file>` prints redacted lines plus the parse result. **Jamie
-   runs it on one real statement before any UI is built.** This is the single highest-value
-   step in the plan and it costs an afternoon.
-2. The gap threshold becomes relative to font size (`> 0.25 * fontSize`), merging items
-   below it.
-3. The confirm table surfaces `skipped` and `warnings`, plus an
-   **opening → closing balance reconciliation line** ("matches statement" / "off by $X").
-   A silently dropped row is then caught at import, not at year end.
+So the checks stay, for that reason rather than the original one:
 
-**Also verify (5 minutes):** the bank web banking almost certainly offers on-demand
-**CSV transaction export**. If it does, the quarterly-PDF constraint disappears — a CSV
-importer is ~50 lines, reuses the categorizer and the fingerprint, and becomes the first
-tab on `/add` with PDF second. This changes the product more than any feature in this plan.
+1. `npm run dump -- <file>` prints redacted lines plus the parse result. **Run it on one
+   real statement.** Output is safe to paste into a chat.
+2. The gap threshold is a fraction of the font size, not an absolute distance — a
+   producer may render at any scale.
+3. Every import reconciles: opening balance plus every parsed amount must land on the
+   closing balance, and across several statements each opening balance must equal the
+   previous closing balance. A dropped row has nowhere to hide.
 
----
-
-## Importing several statements at once — not a convenience, a requirement
-
-Bills do not share a rhythm: water and electricity here arrive roughly every 2 months,
-some services quarterly, rates annually, and **income is fortnightly**. None of that is
-visible in one statement. Cadence cannot be detected, a trailing average cannot be
-trusted, and `recurringMonthlyRate` has nothing to work with until several periods are
-in. So multi-file import is what makes the recurring math mean anything.
-
-**How it works**
-
-1. The client picks N files and uploads them **one request per file**. Vercel caps a
-   request body at 4.5 MB and that is per request, not per file — several statements in
-   one POST would fail as an opaque 413.
-2. Each file is parsed in memory and returns rows plus per-file metadata: statement
-   period, opening and closing balance, `skipped`, `warnings`.
-3. Rows from every file merge into **one** confirm table, sorted by date, with a source
-   column so a suspicious row can be traced back to its file.
-4. **Cross-file dedupe before display.** Consecutive statements overlap at their
-   boundaries and the same transaction genuinely appears twice. Dedupe on
-   `source_fingerprint` across the whole batch, and mark which file each survivor came from.
-5. **Balance chaining — a real integrity check that only exists with multiple files.**
-   Sort by period; statement N's opening balance must equal statement N−1's closing
-   balance. A mismatch means either a missing statement ("nothing covers 1 May – 30 Jun")
-   or an overlap, and the app says which. Combined with the per-file
-   opening→closing reconciliation, a silently dropped row has nowhere left to hide.
-6. The batch imports as **one transaction under one `upload_id`**, so undo removes the
-   whole batch, not one file of five.
-
-**Cadence is detected, not declared.** With history, intervals between charges from the
-same merchant give it away: take the median gap in days and snap to 14 / 30 / 61 / 91 / 365. The user's manual override stays, but it stops being the only source.
-
-## Fortnightly breaks `cadence_months`, and it breaks the month scoring too
-
-`cadenceMonths: number` cannot express a fortnight, and Australian pay usually is one.
-Two separate problems:
-
-- **Modelling.** Replace `cadence_months` with `cadence_unit ('day'|'week'|'month')` +
-  `cadence_count`. Fortnightly = `(week, 2)`, monthly = `(month, 1)`, bimonthly =
-  `(month, 2)`, annual = `(month, 12)`. A monthly run rate for a fortnightly item is
-  `amount × 365.25 ÷ 14 ÷ 12`, not `amount × 2`.
-- **Scoring.** Most months hold two pays; **twice a year a month holds three**. That
-  month clears every scenario and its neighbours look worse, for reasons that have
-  nothing to do with spending. The dashboard must not present that as a good month
-  silently. Detect the pay cadence from income rows, count the cycles that landed in the
-  month, and **annotate** — "3 pay cycles this month" / "2 pay cycles" — rather than
-  smoothing it away. Smoothing hides the one thing worth knowing; a label explains the
-  spike in a way that survives being looked at six months later.
-
-Tests: `cadence.test.ts` (fortnightly → monthly rate; median-gap detection across
-14/30/61/365-day series) and `paycycles.test.ts` (a 3-pay month is flagged, and its
-scenario verdict carries the annotation).
+**Also verify (5 minutes):** whether the bank's desktop banking offers CSV, OFX or QIF
+export. Any of the three removes the quarterly-PDF constraint; OFX and QIF are more
+structured than CSV and easier to parse correctly.
 
 ## Screens
 

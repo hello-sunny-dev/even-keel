@@ -1,11 +1,14 @@
-import "server-only";
 import type { Txn } from "../aggregate";
-import { dateFromDriver } from "../dates";
-import { CATEGORIES, type Category } from "../categories";
 import type { Cadence } from "../cadence";
+import { CATEGORIES, type Category } from "../categories";
 import type { Rule, RuleMatchType, RuleSource } from "../rules";
-import type { SavingsPlan } from "../savings";
-import { db } from "./client";
+import type { Db } from "./port";
+
+/**
+ * Every query is scoped to a household and casts at the boundary, so callers
+ * get numbers and date strings rather than whatever shape the driver felt like
+ * returning. See `port.ts` for why both of those are the query's job.
+ */
 
 export type StoredCategory = Category & {
   targetMonthly: number | null;
@@ -13,165 +16,17 @@ export type StoredCategory = Category & {
   archived: boolean;
 };
 
-const num = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
-const numOrNull = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
-
-export async function listCategories(): Promise<StoredCategory[]> {
-  const rows = await db()`
-    select id, name, "group", kind, one_off, cadence_unit, cadence_count, target_monthly, confirmed_monthly_rate, archived
-    from categories where archived = false order by "group", name`;
-  return rows.map((r) => ({
-    id: r.id as string,
-    name: r.name as string,
-    group: r.group as Category["group"],
-    kind: r.kind as Category["kind"],
-    oneOff: r.one_off as boolean,
-    cadence: {
-      unit: (r.cadence_unit as "day" | "week" | "month") ?? "month",
-      count: Number(r.cadence_count ?? 1),
-    },
-    targetMonthly: numOrNull(r.target_monthly),
-    confirmedMonthlyRate: numOrNull(r.confirmed_monthly_rate),
-    archived: r.archived as boolean,
-  }));
-}
-
-export async function upsertCategory(
-  c: Partial<StoredCategory> & { id: string; name: string; group: Category["group"] },
-) {
-  await db()`
-    insert into categories (id, name, "group", kind, one_off, cadence_unit, cadence_count, target_monthly, confirmed_monthly_rate)
-    values (${c.id}, ${c.name}, ${c.group}, ${c.kind ?? "expense"}, ${c.oneOff ?? false},
-            ${c.cadence?.unit ?? "month"}, ${c.cadence?.count ?? 1},
-            ${c.targetMonthly ?? null}, ${c.confirmedMonthlyRate ?? null})
-    on conflict (id) do update set
-      name = excluded.name,
-      "group" = excluded."group",
-      kind = excluded.kind,
-      one_off = excluded.one_off,
-      cadence_unit = excluded.cadence_unit,
-      cadence_count = excluded.cadence_count,
-      target_monthly = excluded.target_monthly,
-      confirmed_monthly_rate = excluded.confirmed_monthly_rate`;
-}
-
-export async function setCategorySettings(
-  id: string,
-  patch: {
-    targetMonthly?: number | null;
-    confirmedMonthlyRate?: number | null;
-    cadence?: Cadence;
-    oneOff?: boolean;
-  },
-) {
-  const sql = db();
-  if (patch.targetMonthly !== undefined) {
-    await sql`update categories set target_monthly = ${patch.targetMonthly} where id = ${id}`;
-  }
-  if (patch.confirmedMonthlyRate !== undefined) {
-    await sql`update categories set confirmed_monthly_rate = ${patch.confirmedMonthlyRate} where id = ${id}`;
-  }
-  if (patch.cadence !== undefined) {
-    await sql`update categories set cadence_unit = ${patch.cadence.unit}, cadence_count = ${patch.cadence.count} where id = ${id}`;
-  }
-  if (patch.oneOff !== undefined) {
-    await sql`update categories set one_off = ${patch.oneOff} where id = ${id}`;
-  }
-}
-
-export async function listUserRules(): Promise<Rule[]> {
-  const rows = await db()`
-    select id, pattern, category_id, match_type, source, priority
-    from rules where source = 'user' order by priority desc`;
-  return rows.map((r) => ({
-    id: r.id as string,
-    pattern: r.pattern as string,
-    categoryId: r.category_id as string,
-    matchType: r.match_type as RuleMatchType,
-    source: r.source as RuleSource,
-    priority: Number(r.priority),
-  }));
-}
-
-export async function saveRule(rule: Rule) {
-  await db()`
-    insert into rules (id, pattern, category_id, match_type, source, priority)
-    values (${rule.id}, ${rule.pattern}, ${rule.categoryId}, ${rule.matchType}, ${rule.source}, ${rule.priority})
-    on conflict (id) do update set
-      pattern = excluded.pattern,
-      category_id = excluded.category_id,
-      priority = excluded.priority`;
-}
-
-/** Remembering a correction: one merchant key maps to one category, latest wins. */
-export async function rememberMerchant(pattern: string, categoryId: string) {
-  if (!pattern) return;
-  await db()`
-    insert into rules (id, pattern, category_id, match_type, source, priority)
-    values (${`user-${pattern.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`}, ${pattern}, ${categoryId}, 'merchant', 'user', 100)
-    on conflict (pattern) where match_type = 'merchant'
-    do update set category_id = excluded.category_id`;
-}
-
-export async function deleteRule(id: string) {
-  await db()`delete from rules where id = ${id} and source = 'user'`;
-}
-
-function toTxn(r: Record<string, unknown>): Txn {
-  // `toISOString()` here would move the day backwards east of UTC.
-  const date = dateFromDriver(r.txn_date);
-  return {
-    id: String(r.id),
-    date,
-    month: String(r.month),
-    description: String(r.description),
-    amount: num(r.amount),
-    categoryId: (r.category_id as string | null) ?? null,
-    oneOffOverride: (r.one_off_override as boolean | null) ?? null,
-    needsReview: Boolean(r.needs_review),
-    isSplitParent: Boolean(r.is_split_parent),
-  };
-}
-
 export type TxnRow = Txn & {
   merchantKey: string;
   balance: number | null;
+  currency: string;
+  txnKind: "income" | "expense" | "transfer";
+  source: "csv" | "pdf" | "manual";
+  granularity: "transaction" | "month";
+  sourceFingerprint: string;
+  uploadId: string | null;
   splitParentId: string | null;
 };
-
-function toTxnRow(r: Record<string, unknown>): TxnRow {
-  return {
-    ...toTxn(r),
-    merchantKey: String(r.merchant_key ?? ""),
-    balance: numOrNull(r.balance),
-    splitParentId: (r.split_parent_id as string | null) ?? null,
-  };
-}
-
-export async function listTransactions(): Promise<Txn[]> {
-  const rows = await db()`
-    select id, txn_date, month, description, amount, category_id, one_off_override, needs_review, is_split_parent
-    from transactions order by txn_date, id`;
-  return rows.map(toTxn);
-}
-
-export async function listTransactionsForMonth(month: string): Promise<TxnRow[]> {
-  const rows = await db()`
-    select id, txn_date, month, description, merchant_key, amount, balance, category_id,
-           one_off_override, needs_review, is_split_parent, split_parent_id
-    from transactions where month = ${month} order by txn_date, id`;
-  return rows.map(toTxnRow);
-}
-
-export async function listNeedsReview(limit = 200): Promise<TxnRow[]> {
-  const rows = await db()`
-    select id, txn_date, month, description, merchant_key, amount, balance, category_id,
-           one_off_override, needs_review, is_split_parent, split_parent_id
-    from transactions
-    where needs_review = true and is_split_parent = false
-    order by txn_date desc limit ${limit}`;
-  return rows.map(toTxnRow);
-}
 
 export type InsertableTransaction = {
   date: string;
@@ -179,167 +34,461 @@ export type InsertableTransaction = {
   description: string;
   merchantKey: string;
   amount: number;
+  currency?: string;
   balance: number | null;
+  kind: "income" | "expense" | "transfer";
   categoryId: string | null;
   oneOffOverride: boolean | null;
   needsReview: boolean;
-  fingerprint: string;
+  source: "csv" | "pdf" | "manual";
+  granularity?: "transaction" | "month";
+  sourceFingerprint: string;
 };
 
-/** Returns how many rows were new; duplicates are silently ignored. */
-export async function insertTransactions(rows: InsertableTransaction[]): Promise<number> {
+/* ------------------------------------------------------------- households */
+
+export async function firstHouseholdId(db: Db): Promise<string | null> {
+  const rows = await db.query<{ id: string }>(
+    "select id::text from households order by created_at limit 1",
+  );
+  return rows[0]?.id ?? null;
+}
+
+export async function createHousehold(
+  db: Db,
+  name: string,
+  opts: { currency?: string; timeZone?: string } = {},
+): Promise<string> {
+  const rows = await db.query<{ id: string }>(
+    `insert into households (name, display_currency, time_zone)
+     values ($1, $2, $3) returning id::text`,
+    [name, opts.currency ?? "AUD", opts.timeZone ?? "Australia/Perth"],
+  );
+  return rows[0].id;
+}
+
+/* ------------------------------------------------------------- categories */
+
+export async function listCategories(db: Db, household: string): Promise<StoredCategory[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, name, "group", kind, one_off, cadence_unit, cadence_count,
+            target_monthly::float8 as target_monthly,
+            confirmed_monthly_rate::float8 as confirmed_monthly_rate,
+            archived
+       from categories
+      where household_id = $1
+      order by "group", name`,
+    [household],
+  );
+
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    group: r.group as Category["group"],
+    kind: r.kind as Category["kind"],
+    oneOff: Boolean(r.one_off),
+    cadence: {
+      unit: (r.cadence_unit as Cadence["unit"]) ?? "month",
+      count: Number(r.cadence_count ?? 1),
+    },
+    targetMonthly: r.target_monthly === null ? null : Number(r.target_monthly),
+    confirmedMonthlyRate:
+      r.confirmed_monthly_rate === null ? null : Number(r.confirmed_monthly_rate),
+    archived: Boolean(r.archived),
+  }));
+}
+
+/** Archived categories stay readable, so old rows keep their name. */
+export async function categoryMap(db: Db, household: string): Promise<Map<string, Category>> {
+  const all = await listCategories(db, household);
+  return new Map(all.map((c) => [c.id, c]));
+}
+
+export async function seedCategories(db: Db, household: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    for (const c of CATEGORIES) {
+      await tx.query(
+        `insert into categories (id, household_id, name, "group", kind, one_off, cadence_unit, cadence_count)
+         values ($1, $2, $3, $4, $5, $6, $7, $8)
+         on conflict (household_id, id) do nothing`,
+        [c.id, household, c.name, c.group, c.kind, c.oneOff, c.cadence.unit, c.cadence.count],
+      );
+    }
+  });
+}
+
+export async function setCategorySettings(
+  db: Db,
+  household: string,
+  id: string,
+  patch: {
+    targetMonthly?: number | null;
+    confirmedMonthlyRate?: number | null;
+    cadence?: Cadence;
+    oneOff?: boolean;
+    name?: string;
+  },
+): Promise<void> {
+  const sets: string[] = [];
+  const params: unknown[] = [household, id];
+  const add = (fragment: string, ...values: unknown[]) => {
+    sets.push(fragment.replace(/\?/g, () => `$${params.push(values.shift())}`));
+  };
+
+  if (patch.targetMonthly !== undefined) add("target_monthly = ?", patch.targetMonthly);
+  if (patch.confirmedMonthlyRate !== undefined)
+    add("confirmed_monthly_rate = ?", patch.confirmedMonthlyRate);
+  if (patch.cadence !== undefined)
+    add("cadence_unit = ?, cadence_count = ?", patch.cadence.unit, patch.cadence.count);
+  if (patch.oneOff !== undefined) add("one_off = ?", patch.oneOff);
+  if (patch.name !== undefined) add("name = ?", patch.name);
+  if (sets.length === 0) return;
+
+  await db.query(
+    `update categories set ${sets.join(", ")} where household_id = $1 and id = $2`,
+    params,
+  );
+}
+
+/**
+ * Fold one category into another: move its transactions and rules across, then
+ * archive it. Archiving rather than deleting keeps the name available for rows
+ * that still reference it in history.
+ */
+export async function mergeCategories(
+  db: Db,
+  household: string,
+  from: string,
+  into: string,
+): Promise<number> {
+  return db.transaction(async (tx) => {
+    const moved = await tx.query<{ id: string }>(
+      `update transactions set category_id = $3
+        where household_id = $1 and category_id = $2 returning id::text`,
+      [household, from, into],
+    );
+    await tx.query(
+      `update rules set category_id = $3 where household_id = $1 and category_id = $2`,
+      [household, from, into],
+    );
+    await tx.query(`update categories set archived = true where household_id = $1 and id = $2`, [
+      household,
+      from,
+    ]);
+    return moved.length;
+  });
+}
+
+/* ------------------------------------------------------------------ rules */
+
+export async function listUserRules(db: Db, household: string): Promise<Rule[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select id, pattern, category_id, match_type, source, priority::int as priority
+       from rules where household_id = $1 and source = 'user' order by priority desc`,
+    [household],
+  );
+
+  return rows.map((r) => ({
+    id: String(r.id),
+    pattern: String(r.pattern),
+    categoryId: String(r.category_id),
+    matchType: r.match_type as RuleMatchType,
+    source: r.source as RuleSource,
+    priority: Number(r.priority),
+  }));
+}
+
+/** A correction, remembered by merchant. The newest one wins. */
+export async function rememberMerchant(
+  db: Db,
+  household: string,
+  pattern: string,
+  categoryId: string,
+): Promise<void> {
+  if (!pattern) return;
+  const id = `user-${pattern.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
+  await db.query(
+    `insert into rules (id, household_id, pattern, category_id, match_type, source, priority)
+     values ($1, $2, $3, $4, 'merchant', 'user', 100)
+     on conflict (household_id, pattern) where match_type = 'merchant'
+     do update set category_id = excluded.category_id, id = excluded.id`,
+    [id, household, pattern, categoryId],
+  );
+}
+
+export async function deleteRule(db: Db, household: string, id: string): Promise<void> {
+  await db.query(`delete from rules where household_id = $1 and id = $2 and source = 'user'`, [
+    household,
+    id,
+  ]);
+}
+
+/* ----------------------------------------------------------- transactions */
+
+const TXN_COLUMNS = `
+  id::text, txn_date::text as txn_date, month, description, merchant_key,
+  amount::float8 as amount, currency, balance::float8 as balance, kind,
+  category_id, one_off_override, needs_review, source, granularity,
+  source_fingerprint, upload_id::text as upload_id,
+  split_parent_id::text as split_parent_id, is_split_parent`;
+
+function toTxnRow(r: Record<string, unknown>): TxnRow {
+  return {
+    id: String(r.id),
+    date: String(r.txn_date),
+    month: String(r.month),
+    description: String(r.description),
+    amount: Number(r.amount),
+    categoryId: (r.category_id as string | null) ?? null,
+    oneOffOverride: (r.one_off_override as boolean | null) ?? null,
+    needsReview: Boolean(r.needs_review),
+    isSplitParent: Boolean(r.is_split_parent),
+    merchantKey: String(r.merchant_key ?? ""),
+    balance: r.balance === null || r.balance === undefined ? null : Number(r.balance),
+    currency: String(r.currency ?? "AUD"),
+    txnKind: r.kind as TxnRow["txnKind"],
+    source: r.source as TxnRow["source"],
+    granularity: r.granularity as TxnRow["granularity"],
+    sourceFingerprint: String(r.source_fingerprint ?? ""),
+    uploadId: (r.upload_id as string | null) ?? null,
+    splitParentId: (r.split_parent_id as string | null) ?? null,
+  };
+}
+
+export async function listTransactions(
+  db: Db,
+  household: string,
+  opts: { month?: string; search?: string; needsReview?: boolean; limit?: number } = {},
+): Promise<TxnRow[]> {
+  const where = ["household_id = $1", "deleted_at is null"];
+  const params: unknown[] = [household];
+
+  if (opts.month) where.push(`month = $${params.push(opts.month)}`);
+  if (opts.needsReview) where.push("needs_review and not is_split_parent");
+  if (opts.search) {
+    where.push(`description ilike $${params.push(`%${opts.search}%`)}`);
+  }
+
+  const limit = opts.limit ? ` limit $${params.push(opts.limit)}` : "";
+  const rows = await db.query<Record<string, unknown>>(
+    `select ${TXN_COLUMNS} from transactions
+      where ${where.join(" and ")}
+      order by txn_date desc, id${limit}`,
+    params,
+  );
+  return rows.map(toTxnRow);
+}
+
+/**
+ * Insert a batch in one statement.
+ *
+ * postgres.js has an array helper for this but it does not exist through
+ * `unsafe`, and one round-trip per row is slow enough to matter on a
+ * two-month statement. `unnest` works identically on both drivers.
+ *
+ * Returns how many rows were new — duplicates collide on the fingerprint index
+ * and are dropped.
+ */
+export async function insertTransactions(
+  db: Db,
+  household: string,
+  rows: InsertableTransaction[],
+  uploadId: string | null = null,
+): Promise<number> {
   if (rows.length === 0) return 0;
-  const inserted = await db()`
-    insert into transactions ${db()(
-      rows.map((r) => ({
-        txn_date: r.date,
-        month: r.month,
-        description: r.description,
-        merchant_key: r.merchantKey,
-        amount: r.amount,
-        balance: r.balance,
-        category_id: r.categoryId,
-        one_off_override: r.oneOffOverride,
-        needs_review: r.needsReview,
-        fingerprint: r.fingerprint,
-      })),
-      "txn_date",
-      "month",
-      "description",
-      "merchant_key",
-      "amount",
-      "balance",
-      "category_id",
-      "one_off_override",
-      "needs_review",
-      "fingerprint",
-    )}
-    on conflict do nothing
-    returning id`;
+
+  const inserted = await db.query<{ id: string }>(
+    `insert into transactions
+       (household_id, txn_date, month, description, merchant_key, amount, currency,
+        balance, kind, category_id, one_off_override, needs_review, source,
+        granularity, source_fingerprint, upload_id)
+     select $1,
+            d::date, m, descr, mk, amt, cur, bal, k, cat, oo, nr, src, gran, fp, $2::uuid
+       from unnest(
+         $3::text[],  $4::text[],  $5::text[],  $6::text[],  $7::numeric[], $8::text[],
+         $9::numeric[], $10::text[], $11::text[], $12::boolean[], $13::boolean[],
+         $14::text[], $15::text[], $16::text[]
+       ) as t(d, m, descr, mk, amt, cur, bal, k, cat, oo, nr, src, gran, fp)
+     on conflict do nothing
+     returning id::text`,
+    [
+      household,
+      uploadId,
+      rows.map((r) => r.date),
+      rows.map((r) => r.month),
+      rows.map((r) => r.description),
+      rows.map((r) => r.merchantKey),
+      rows.map((r) => r.amount),
+      rows.map((r) => r.currency ?? "AUD"),
+      rows.map((r) => r.balance),
+      rows.map((r) => r.kind),
+      rows.map((r) => r.categoryId),
+      rows.map((r) => r.oneOffOverride),
+      rows.map((r) => r.needsReview),
+      rows.map((r) => r.source),
+      rows.map((r) => r.granularity ?? "transaction"),
+      rows.map((r) => r.sourceFingerprint),
+    ],
+  );
+
   return inserted.length;
 }
 
 export async function categoriseTransaction(
+  db: Db,
+  household: string,
   id: string,
   patch: { categoryId: string | null; oneOffOverride?: boolean | null },
-) {
-  await db()`
-    update transactions set
-      category_id = ${patch.categoryId},
-      one_off_override = ${patch.oneOffOverride ?? null},
-      needs_review = ${patch.categoryId === null}
-    where id = ${id}`;
+): Promise<void> {
+  await db.query(
+    // $3 is cast because it also appears bare in `is null`, where Postgres
+    // has nothing else to infer a type from.
+    `update transactions
+        set category_id = $3::text,
+            one_off_override = $4::boolean,
+            needs_review = $3::text is null
+      where household_id = $1 and id = $2`,
+    [household, id, patch.categoryId, patch.oneOffOverride ?? null],
+  );
+}
+
+/**
+ * Apply a category to every untagged transaction from the same merchant.
+ *
+ * Tagging one row and leaving its history wrong is the difference between a
+ * correction and a chore.
+ */
+export async function applyToMerchantHistory(
+  db: Db,
+  household: string,
+  merchantKey: string,
+  categoryId: string,
+  opts: { includeTagged?: boolean } = {},
+): Promise<number> {
+  if (!merchantKey) return 0;
+  const condition = opts.includeTagged ? "" : " and category_id is null";
+  const rows = await db.query<{ id: string }>(
+    `update transactions
+        set category_id = $3, needs_review = false
+      where household_id = $1 and merchant_key = $2 and deleted_at is null${condition}
+      returning id::text`,
+    [household, merchantKey, categoryId],
+  );
+  return rows.length;
+}
+
+export async function countMerchantHistory(
+  db: Db,
+  household: string,
+  merchantKey: string,
+): Promise<number> {
+  const rows = await db.query<{ n: number }>(
+    `select count(*)::int as n from transactions
+      where household_id = $1 and merchant_key = $2 and category_id is null and deleted_at is null`,
+    [household, merchantKey],
+  );
+  return Number(rows[0]?.n ?? 0);
 }
 
 /**
  * Split one transaction into several categorised parts — the bundled first
- * bill case (install fee + first month of a subscription). The parent stays
- * for provenance but stops counting.
+ * bill, where an install fee and the first month arrive as one charge. The
+ * parent stays for provenance but stops counting.
  */
 export async function splitTransaction(
+  db: Db,
+  household: string,
   id: string,
   parts: { amount: number; categoryId: string; oneOffOverride: boolean | null }[],
-) {
-  const sql = db();
-  await sql.begin(async (tx) => {
-    const [parent] = await tx`
-      select id, txn_date, month, description, merchant_key, amount, fingerprint
-      from transactions where id = ${id} for update`;
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const [parent] = await tx.query<Record<string, unknown>>(
+      `select ${TXN_COLUMNS} from transactions where household_id = $1 and id = $2 for update`,
+      [household, id],
+    );
     if (!parent) throw new Error("Transaction not found");
 
-    const total = parts.reduce((acc, p) => acc + Math.round(p.amount * 100), 0);
+    const total = parts.reduce((sum, p) => sum + Math.round(p.amount * 100), 0);
     if (total !== Math.round(Number(parent.amount) * 100)) {
       throw new Error("Split parts must add up to the original amount");
     }
 
-    await tx`delete from transactions where split_parent_id = ${id}`;
+    await tx.query("delete from transactions where split_parent_id = $1", [id]);
     for (const [i, part] of parts.entries()) {
-      await tx`
-        insert into transactions
-          (txn_date, month, description, merchant_key, amount, category_id, one_off_override,
-           needs_review, split_parent_id, fingerprint)
-        values (${parent.txn_date}, ${parent.month}, ${parent.description}, ${parent.merchant_key},
-                ${part.amount}, ${part.categoryId}, ${part.oneOffOverride},
-                false, ${id}, ${`${parent.fingerprint}#${i + 1}`})`;
+      await tx.query(
+        `insert into transactions
+           (household_id, txn_date, month, description, merchant_key, amount, currency,
+            kind, category_id, one_off_override, needs_review, source, granularity,
+            source_fingerprint, split_parent_id)
+         values ($1, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, false, $11, $12, $13, $14)`,
+        [
+          household,
+          parent.txn_date,
+          parent.month,
+          parent.description,
+          parent.merchant_key,
+          part.amount,
+          parent.currency,
+          part.amount > 0 ? "income" : "expense",
+          part.categoryId,
+          part.oneOffOverride,
+          parent.source,
+          parent.granularity,
+          `${parent.source_fingerprint}#part${i + 1}`,
+          id,
+        ],
+      );
     }
-    await tx`update transactions set is_split_parent = true, needs_review = false where id = ${id}`;
+    await tx.query(
+      "update transactions set is_split_parent = true, needs_review = false where id = $1",
+      [id],
+    );
   });
 }
 
-export async function unsplitTransaction(id: string) {
-  const sql = db();
-  await sql.begin(async (tx) => {
-    await tx`delete from transactions where split_parent_id = ${id}`;
-    await tx`update transactions set is_split_parent = false, needs_review = category_id is null where id = ${id}`;
+export async function unsplitTransaction(db: Db, id: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.query("delete from transactions where split_parent_id = $1", [id]);
+    await tx.query(
+      `update transactions
+          set is_split_parent = false, needs_review = category_id is null
+        where id = $1`,
+      [id],
+    );
   });
 }
 
-export async function deleteTransaction(id: string) {
-  await db()`delete from transactions where id = ${id}`;
+/* ---------------------------------------------------------------- uploads */
+
+export async function recordUpload(
+  db: Db,
+  household: string,
+  counts: { kind: "csv" | "pdf" | "manual"; files: number; parsed: number; skipped: number },
+): Promise<string> {
+  const rows = await db.query<{ id: string }>(
+    `insert into uploads (household_id, kind, file_count, parsed_count, skipped_count)
+     values ($1, $2, $3, $4, $5) returning id::text`,
+    [household, counts.kind, counts.files, counts.parsed, counts.skipped],
+  );
+  return rows[0].id;
 }
 
-function toPlan(r: Record<string, unknown>): SavingsPlan {
-  return {
-    id: String(r.id),
-    name: String(r.name),
-    monthlyAmount: num(r.monthly_amount),
-    annualRate: num(r.annual_rate),
-    startingBalance: num(r.starting_balance),
-    goalAmount: num(r.goal_amount),
-    goalYears: Number(r.goal_years),
-    active: Boolean(r.active),
-  };
+export async function finishUpload(db: Db, uploadId: string, inserted: number): Promise<void> {
+  await db.query("update uploads set inserted_count = $2 where id = $1", [uploadId, inserted]);
 }
 
-export async function listPlans(): Promise<SavingsPlan[]> {
-  const rows = await db()`select * from savings_plans order by monthly_amount`;
-  return rows.map(toPlan);
-}
-
-export async function activePlan(): Promise<SavingsPlan | null> {
-  const rows = await db()`select * from savings_plans where active limit 1`;
-  return rows.length ? toPlan(rows[0]) : null;
-}
-
-export async function savePlan(plan: Omit<SavingsPlan, "id" | "active"> & { id?: string }) {
-  if (plan.id) {
-    await db()`
-      update savings_plans set name = ${plan.name}, monthly_amount = ${plan.monthlyAmount},
-        annual_rate = ${plan.annualRate}, starting_balance = ${plan.startingBalance},
-        goal_amount = ${plan.goalAmount}, goal_years = ${plan.goalYears}
-      where id = ${plan.id}`;
-    return plan.id;
-  }
-  const [row] = await db()`
-    insert into savings_plans (name, monthly_amount, annual_rate, starting_balance, goal_amount, goal_years)
-    values (${plan.name}, ${plan.monthlyAmount}, ${plan.annualRate}, ${plan.startingBalance},
-            ${plan.goalAmount}, ${plan.goalYears})
-    returning id`;
-  return String(row.id);
-}
-
-export async function setActivePlan(id: string) {
-  const sql = db();
-  await sql.begin(async (tx) => {
-    await tx`update savings_plans set active = false where active`;
-    await tx`update savings_plans set active = true where id = ${id}`;
-  });
-}
-
-export async function deletePlan(id: string) {
-  await db()`delete from savings_plans where id = ${id}`;
-}
-
-export async function recordUpload(parsed: number, inserted: number, skipped: number) {
-  await db()`insert into uploads (parsed_count, inserted_count, skipped_count) values (${parsed}, ${inserted}, ${skipped})`;
-}
-
-/** Idempotent seed of the taxonomy shipped with the app. */
-export async function seedCategories() {
-  for (const c of CATEGORIES) {
-    await db()`
-      insert into categories (id, name, "group", kind, one_off, cadence_unit, cadence_count)
-      values (${c.id}, ${c.name}, ${c.group}, ${c.kind}, ${c.oneOff}, ${c.cadence.unit}, ${c.cadence.count})
-      on conflict (id) do nothing`;
-  }
+/**
+ * Undo a whole import.
+ *
+ * Soft-deleted rather than removed, so a mistaken undo is recoverable and the
+ * fingerprint index stops treating the rows as present.
+ */
+export async function undoUpload(db: Db, household: string, uploadId: string): Promise<number> {
+  const rows = await db.query<{ id: string }>(
+    `update transactions set deleted_at = now()
+      where household_id = $1 and upload_id = $2 and deleted_at is null
+      returning id::text`,
+    [household, uploadId],
+  );
+  return rows.length;
 }
