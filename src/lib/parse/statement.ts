@@ -14,6 +14,14 @@ export type ParsedTransaction = {
   amount: number;
   balance: number | null;
   signSource: SignSource;
+  /**
+   * Identity of this row *as the statement printed it*. Computed here from
+   * parsed values and never recomputed: a user correcting a misparsed amount
+   * in the confirm table must not change what the row is, or re-importing the
+   * same statement would insert the uncorrected version alongside it as
+   * something new.
+   */
+  sourceFingerprint: string;
 };
 
 export type ParseResult = {
@@ -154,6 +162,7 @@ export function parseStatementText(
     .filter(Boolean);
 
   const transactions: ParsedTransaction[] = [];
+  const seen = new Map<string, number>();
   const skipped: string[] = [];
   const warnings: string[] = [];
 
@@ -268,7 +277,7 @@ export function parseStatementText(
       continue;
     }
 
-    transactions.push({
+    const row: ParsedTransaction = {
       date,
       month: date.slice(0, 7),
       description,
@@ -276,7 +285,14 @@ export function parseStatementText(
       amount: Number(signed.toFixed(2)),
       balance,
       signSource,
-    });
+      sourceFingerprint: "",
+    };
+    // Two identical charges on one day are real; count them so they stay two.
+    const repeatKey = `${row.date}|${row.description}|${row.amount}`;
+    const occurrence = (seen.get(repeatKey) ?? 0) + 1;
+    seen.set(repeatKey, occurrence);
+    row.sourceFingerprint = transactionFingerprint(row, occurrence);
+    transactions.push(row);
 
     if (balance !== null) prevBalance = balance;
     else if (prevBalance !== null) prevBalance = Number((prevBalance + signed).toFixed(2));
@@ -289,9 +305,19 @@ export function parseStatementText(
   return { transactions, openingBalance, closingBalance, skipped, warnings };
 }
 
-/** Stable identity for a transaction, so re-uploading a statement cannot double-count. */
+/**
+ * Stable identity for a row, so re-uploading a statement cannot double-count.
+ *
+ * Date, text and amount alone are not enough: two $4.49 Apple charges on the
+ * same day are a real thing, and collapsing them loses money quietly. The
+ * running balance separates them when the statement prints one; when it does
+ * not, the occurrence index within the statement does.
+ */
 export function transactionFingerprint(
-  t: Pick<ParsedTransaction, "date" | "description" | "amount">,
+  t: Pick<ParsedTransaction, "date" | "description" | "amount" | "balance">,
+  occurrence = 1,
 ): string {
-  return `${t.date}|${t.description.toUpperCase().replace(/\s+/g, " ")}|${t.amount.toFixed(2)}`;
+  const text = t.description.toUpperCase().replace(/\s+/g, " ");
+  const tail = t.balance !== null ? t.balance.toFixed(2) : `#${occurrence}`;
+  return `${t.date}|${text}|${t.amount.toFixed(2)}|${tail}`;
 }

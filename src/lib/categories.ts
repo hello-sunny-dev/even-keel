@@ -1,3 +1,5 @@
+import type { Cadence } from "./cadence";
+
 export type CategoryKind = "expense" | "income";
 
 export type CategoryGroup =
@@ -27,10 +29,11 @@ export type Category = {
   oneOff: boolean;
   /**
    * How often this category actually bills. Water and electricity here arrive
-   * roughly every 2 months; rates are annual. A trailing average that assumes
-   * 1 understates anything larger.
+   * roughly every 2 months, rates annually, and income fortnightly — which is
+   * why this is a unit and a count rather than a number of months. A trailing
+   * average that assumes monthly understates everything slower.
    */
-  cadenceMonths: number;
+  cadence: Cadence;
 };
 
 export const CATEGORIES: Category[] = [
@@ -40,7 +43,7 @@ export const CATEGORIES: Category[] = [
     group: "Mortgage",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -49,7 +52,7 @@ export const CATEGORIES: Category[] = [
     group: "Insurance",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "insurance-car",
@@ -57,7 +60,7 @@ export const CATEGORIES: Category[] = [
     group: "Insurance",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "insurance-roadside",
@@ -65,7 +68,7 @@ export const CATEGORIES: Category[] = [
     group: "Insurance",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 12,
+    cadence: { unit: "month", count: 12 },
   },
   {
     id: "insurance-health",
@@ -73,7 +76,7 @@ export const CATEGORIES: Category[] = [
     group: "Insurance",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -82,7 +85,7 @@ export const CATEGORIES: Category[] = [
     group: "Utilities",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 2,
+    cadence: { unit: "month", count: 2 },
   },
   {
     id: "utilities-gas",
@@ -90,7 +93,7 @@ export const CATEGORIES: Category[] = [
     group: "Utilities",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "utilities-water",
@@ -98,7 +101,7 @@ export const CATEGORIES: Category[] = [
     group: "Utilities",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 2,
+    cadence: { unit: "month", count: 2 },
   },
   {
     id: "utilities-internet",
@@ -106,7 +109,7 @@ export const CATEGORIES: Category[] = [
     group: "Utilities",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "utilities-mobile",
@@ -114,7 +117,7 @@ export const CATEGORIES: Category[] = [
     group: "Utilities",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -123,7 +126,7 @@ export const CATEGORIES: Category[] = [
     group: "Subscriptions",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "sub-youtube",
@@ -131,7 +134,7 @@ export const CATEGORIES: Category[] = [
     group: "Subscriptions",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "sub-hbo-max",
@@ -139,7 +142,7 @@ export const CATEGORIES: Category[] = [
     group: "Subscriptions",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "sub-disney-plus",
@@ -147,7 +150,7 @@ export const CATEGORIES: Category[] = [
     group: "Subscriptions",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "sub-ai-tools",
@@ -155,7 +158,7 @@ export const CATEGORIES: Category[] = [
     group: "Subscriptions",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "sub-water-purifier",
@@ -163,7 +166,7 @@ export const CATEGORIES: Category[] = [
     group: "Subscriptions",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   // Catch-all: many different in-app charges all bill as APPLE.COM/BILL. Bank
   // statement text cannot separate them, and pretending otherwise is worse.
@@ -173,7 +176,7 @@ export const CATEGORIES: Category[] = [
     group: "Subscriptions",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -182,7 +185,7 @@ export const CATEGORIES: Category[] = [
     group: "Food",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "food-dining",
@@ -190,7 +193,7 @@ export const CATEGORIES: Category[] = [
     group: "Food",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -199,7 +202,7 @@ export const CATEGORIES: Category[] = [
     group: "Transport",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "transport-car-finance",
@@ -207,7 +210,7 @@ export const CATEGORIES: Category[] = [
     group: "Transport",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -216,7 +219,7 @@ export const CATEGORIES: Category[] = [
     group: "Medical",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -225,7 +228,7 @@ export const CATEGORIES: Category[] = [
     group: "Personal",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "personal-care",
@@ -233,7 +236,7 @@ export const CATEGORIES: Category[] = [
     group: "Personal",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "personal-clothing",
@@ -241,7 +244,7 @@ export const CATEGORIES: Category[] = [
     group: "Personal",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -250,7 +253,7 @@ export const CATEGORIES: Category[] = [
     group: "Pet",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "pet-care",
@@ -258,7 +261,7 @@ export const CATEGORIES: Category[] = [
     group: "Pet",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -267,7 +270,7 @@ export const CATEGORIES: Category[] = [
     group: "Other",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "other-discretionary",
@@ -275,7 +278,7 @@ export const CATEGORIES: Category[] = [
     group: "Other",
     kind: "expense",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -284,7 +287,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "oneoff-moving",
@@ -292,7 +295,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "oneoff-home-hardware",
@@ -300,7 +303,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "oneoff-furniture",
@@ -308,7 +311,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "oneoff-travel",
@@ -316,7 +319,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   // Ticket purchases. Not a subscription, despite living with streaming in the
   // first spreadsheet pass.
@@ -326,7 +329,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "oneoff-government-rates",
@@ -334,7 +337,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 12,
+    cadence: { unit: "month", count: 12 },
   },
   {
     id: "oneoff-business-tax",
@@ -342,7 +345,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 12,
+    cadence: { unit: "month", count: 12 },
   },
   {
     id: "oneoff-pet-adoption",
@@ -350,7 +353,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "oneoff-pet-sitting",
@@ -358,7 +361,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "oneoff-car-deposit",
@@ -366,7 +369,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "oneoff-large-purchase",
@@ -374,7 +377,7 @@ export const CATEGORIES: Category[] = [
     group: "One-off",
     kind: "expense",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 
   {
@@ -383,7 +386,7 @@ export const CATEGORIES: Category[] = [
     group: "Income",
     kind: "income",
     oneOff: false,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "income-house-purchase-funds",
@@ -391,7 +394,7 @@ export const CATEGORIES: Category[] = [
     group: "Income",
     kind: "income",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
   {
     id: "income-oneoff-other",
@@ -399,7 +402,7 @@ export const CATEGORIES: Category[] = [
     group: "Income",
     kind: "income",
     oneOff: true,
-    cadenceMonths: 1,
+    cadence: { unit: "month", count: 1 },
   },
 ];
 

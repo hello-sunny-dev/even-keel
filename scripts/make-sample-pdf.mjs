@@ -1,8 +1,17 @@
 /**
- * Generates test-fixtures/sample/sample-statement.pdf — a synthetic statement
- * in the same shape as a real joint-account PDF, with invented merchants,
- * dates and amounts and no real account identifiers. This one is safe to
- * commit; the real statements never are.
+ * Generates the two committed statement fixtures. Both hold the same invented
+ * merchants, dates and amounts, and neither contains a real account
+ * identifier, so both are safe to commit.
+ *
+ *   sample-statement.pdf      one text run per field — the easy case
+ *   fragmented-statement.pdf  the same statement with every field broken into
+ *                             several runs, which is what real bank PDFs do
+ *
+ * The second one exists because reassembling glyph runs into lines is the
+ * parser's weak point, not its regexes. A real statement routinely emits
+ * "184.55" as three runs with hairline gaps; join them wrongly and the amount
+ * stops matching, so the row is dropped in silence. Parsing both fixtures to
+ * identical results is what proves the gap threshold is right.
  *
  * Run: npm run fixture:sample
  */
@@ -11,10 +20,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
-const OUT = resolve(
-  dirname(fileURLToPath(import.meta.url)),
-  "../test-fixtures/sample/sample-statement.pdf",
-);
+const DIR = resolve(dirname(fileURLToPath(import.meta.url)), "../test-fixtures/sample");
 
 const OPENING_BALANCE = 5000.0;
 
@@ -54,7 +60,7 @@ const money = (n) => n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 // Amounts print unsigned with a running balance beside them, exactly as the
 // real statement does. The parser has to recover the sign from the balance
 // delta — that path is the whole point of this fixture.
-async function build() {
+async function build({ fragmented }) {
   const pdf = await PDFDocument.create();
   pdf.setTitle("Sample Statement");
   pdf.setCreationDate(new Date("2025-05-01T00:00:00Z"));
@@ -139,10 +145,13 @@ async function build() {
   put("Closing balance", COL.desc, { bold: true });
   right(money(balance), COL.balance + 70, { bold: true });
 
-  await mkdir(dirname(OUT), { recursive: true });
-  await writeFile(OUT, await pdf.save());
-  return { rows: ROWS.length, closing: balance };
+  const out = resolve(DIR, fragmented ? "fragmented-statement.pdf" : "sample-statement.pdf");
+  await mkdir(DIR, { recursive: true });
+  await writeFile(out, await pdf.save());
+  return { out, rows: ROWS.length, closing: balance };
 }
 
-const { rows, closing } = await build();
-console.log(`Wrote ${OUT} — ${rows} transactions, closing balance ${money(closing)}`);
+for (const fragmented of [false, true]) {
+  const { out, rows, closing } = await build({ fragmented });
+  console.log(`Wrote ${out} — ${rows} transactions, closing balance ${money(closing)}`);
+}

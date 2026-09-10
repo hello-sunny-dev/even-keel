@@ -205,7 +205,7 @@ Two separate problems:
 - **Modelling.** Replace `cadence_months` with `cadence_unit ('day'|'week'|'month')` +
   `cadence_count`. Fortnightly = `(week, 2)`, monthly = `(month, 1)`, bimonthly =
   `(month, 2)`, annual = `(month, 12)`. A monthly run rate for a fortnightly item is
-  `amount × 26 ÷ 12`, not `amount × 2`.
+  `amount × 365.25 ÷ 14 ÷ 12`, not `amount × 2`.
 - **Scoring.** Most months hold two pays; **twice a year a month holds three**. That
   month clears every scenario and its neighbours look worse, for reasons that have
   nothing to do with spending. The dashboard must not present that as a good month

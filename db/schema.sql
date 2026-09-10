@@ -13,8 +13,9 @@ create table if not exists categories (
   kind                   text not null check (kind in ('expense', 'income')),
   -- A real flag, not a naming convention. Excluded from recurring averages.
   one_off                boolean not null default false,
-  -- Water and electricity bill roughly every 2 months here; rates are annual.
-  cadence_months         integer not null default 1 check (cadence_months >= 1),
+  -- Whole months cannot express a fortnight, and pay here is fortnightly.
+  cadence_unit           text not null default 'month' check (cadence_unit in ('day', 'week', 'month')),
+  cadence_count          integer not null default 1 check (cadence_count >= 1),
   target_monthly         numeric(12, 2),
   -- Overrides the trailing average until enough history exists to trust it.
   confirmed_monthly_rate numeric(12, 2),

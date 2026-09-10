@@ -58,7 +58,13 @@ const TRAILING_LOCATION = /\s+(?:au|aus|australia)$/i;
  */
 export function merchantKey(description: string): string {
   let s = redactDescription(description).toUpperCase();
-  for (const re of NOISE) s = s.replace(re, "");
+  // Rails stack — "VISA DEBIT PURCHASE COLES" wears two of them — so strip
+  // until nothing more comes off rather than making one pass in a fixed order.
+  for (let pass = 0; pass < NOISE.length; pass++) {
+    const before = s;
+    for (const re of NOISE) s = s.replace(re, "");
+    if (s === before) break;
+  }
   s = s
     .replace(/\b(?:ref|reference)\b\s*[:#]?\s*\S*/gi, " ")
     .replace(/\breceipt\b\s*[:#]?\s*\S*/gi, " ")
@@ -72,10 +78,13 @@ export function merchantKey(description: string): string {
   s = s.replace(TRAILING_LOCATION, "").trim();
   // Terminal/store numbers vary between visits to the same shop — dropping them
   // is what lets one correction cover every future transaction from a merchant.
+  // Three tokens, not four: a suburb trailing the shop name appears in some
+  // descriptions and not others, and a merchant the user has already
+  // corrected must not come back as a stranger because of it.
   const key = s
     .split(" ")
     .filter((t) => t && !/^\d+$/.test(t))
-    .slice(0, 4)
+    .slice(0, 3)
     .join(" ");
   // Stripping the payment rail can leave nothing behind ("ATM WITHDRAWAL").
   // An empty key would match every other empty key, so fall back to the
@@ -87,6 +96,6 @@ export function merchantKey(description: string): string {
     .replace(/\s+/g, " ")
     .trim()
     .split(" ")
-    .slice(0, 4)
+    .slice(0, 3)
     .join(" ");
 }

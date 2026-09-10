@@ -71,7 +71,7 @@ fortnightly. A trailing average over a window that misses a billing cycle unders
 cost; `cadence_months` as an integer cannot express a fortnight at all.
 
 **Consequence.** `cadence_unit` + `cadence_count`. A fortnightly item's monthly rate is
-`amount × 26 ÷ 12`. Trailing averages align to whole billing cycles. Twice a year a month
+`amount × 365.25 ÷ 14 ÷ 12`. Trailing averages align to whole billing cycles. Twice a year a month
 holds three pay cycles instead of two — the dashboard **labels** that rather than
 smoothing it, because smoothing hides the one thing worth knowing.
 

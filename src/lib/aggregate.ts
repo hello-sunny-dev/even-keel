@@ -1,5 +1,6 @@
 import { getCategory, type Category, type CategoryGroup } from "./categories";
 import { sumAmounts } from "./money";
+import { cadenceInDays } from "./cadence";
 import { addMonths, monthIndex, monthRange } from "./months";
 import type { SavingsPlan } from "./savings";
 
@@ -105,22 +106,27 @@ export function categoryBreakdown(
     totals.set(key, (totals.get(key) ?? 0) + t.amount);
   }
 
-  return [...totals.entries()]
-    .map(([categoryId, signed]) => {
-      const category = getCategory(categoryId);
-      const actual = Number(Math.abs(signed).toFixed(2));
-      const target = targets.get(categoryId) ?? null;
-      return {
-        categoryId,
-        name: category?.name ?? categoryId,
-        group: category?.group ?? ("Other" as CategoryGroup),
-        oneOff: category?.oneOff ?? false,
-        actual,
-        target,
-        variance: target === null ? null : Number((actual - target).toFixed(2)),
-      };
-    })
-    .sort((a, b) => b.actual - a.actual);
+  return (
+    [...totals.entries()]
+      .map(([categoryId, signed]) => {
+        const category = getCategory(categoryId);
+        const actual = Number(Math.abs(signed).toFixed(2));
+        const target = targets.get(categoryId) ?? null;
+        return {
+          categoryId,
+          name: category?.name ?? categoryId,
+          group: category?.group ?? ("Other" as CategoryGroup),
+          oneOff: category?.oneOff ?? false,
+          actual,
+          target,
+          variance: target === null ? null : Number((actual - target).toFixed(2)),
+        };
+      })
+      // Income has no target and belongs to the summary, not to a table of what
+      // was spent — salary would otherwise sit at the top of every month.
+      .filter((row) => getCategory(row.categoryId)?.kind !== "income")
+      .sort((a, b) => b.actual - a.actual)
+  );
 }
 
 export type RecurringRate = {
@@ -150,7 +156,10 @@ export function recurringMonthlyRate(
   category: Category,
   opts: { asOfMonth: string; windowMonths?: number; confirmedRate?: number | null },
 ): RecurringRate {
-  const cadence = Math.max(1, category.cadenceMonths);
+  // Align the window to whole billing cycles, in months, rounding a
+  // fortnightly or weekly rhythm up to 1 — sub-monthly items bill at least
+  // once a month, so no alignment is needed for them.
+  const cadence = Math.max(1, Math.round(cadenceInDays(category.cadence) / (365.25 / 12)));
   const rows = countable(txns).filter(
     (t) =>
       t.categoryId === category.id &&
@@ -173,7 +182,7 @@ export function recurringMonthlyRate(
       monthsAvailable,
       cadenceMonths: cadence,
       insufficientHistory: false,
-      newlyStarted: monthsAvailable > 0 && monthsAvailable < cadence * 2,
+      newlyStarted: monthsAvailable > 0 && monthsAvailable < cadence * 3,
     };
   }
 
@@ -207,7 +216,8 @@ export function recurringMonthlyRate(
     monthsAvailable,
     cadenceMonths: cadence,
     insufficientHistory,
-    newlyStarted: monthsAvailable < cadence * 2,
+    // Under three billing cycles of history, a trailing average is a guess.
+    newlyStarted: monthsAvailable < cadence * 3,
   };
 }
 

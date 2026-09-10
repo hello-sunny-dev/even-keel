@@ -2,6 +2,7 @@ import "server-only";
 import type { Txn } from "../aggregate";
 import { dateFromDriver } from "../dates";
 import { CATEGORIES, type Category } from "../categories";
+import type { Cadence } from "../cadence";
 import type { Rule, RuleMatchType, RuleSource } from "../rules";
 import type { SavingsPlan } from "../savings";
 import { db } from "./client";
@@ -17,7 +18,7 @@ const numOrNull = (v: unknown): number | null => (v === null || v === undefined 
 
 export async function listCategories(): Promise<StoredCategory[]> {
   const rows = await db()`
-    select id, name, "group", kind, one_off, cadence_months, target_monthly, confirmed_monthly_rate, archived
+    select id, name, "group", kind, one_off, cadence_unit, cadence_count, target_monthly, confirmed_monthly_rate, archived
     from categories where archived = false order by "group", name`;
   return rows.map((r) => ({
     id: r.id as string,
@@ -25,7 +26,10 @@ export async function listCategories(): Promise<StoredCategory[]> {
     group: r.group as Category["group"],
     kind: r.kind as Category["kind"],
     oneOff: r.one_off as boolean,
-    cadenceMonths: Number(r.cadence_months),
+    cadence: {
+      unit: (r.cadence_unit as "day" | "week" | "month") ?? "month",
+      count: Number(r.cadence_count ?? 1),
+    },
     targetMonthly: numOrNull(r.target_monthly),
     confirmedMonthlyRate: numOrNull(r.confirmed_monthly_rate),
     archived: r.archived as boolean,
@@ -36,15 +40,17 @@ export async function upsertCategory(
   c: Partial<StoredCategory> & { id: string; name: string; group: Category["group"] },
 ) {
   await db()`
-    insert into categories (id, name, "group", kind, one_off, cadence_months, target_monthly, confirmed_monthly_rate)
+    insert into categories (id, name, "group", kind, one_off, cadence_unit, cadence_count, target_monthly, confirmed_monthly_rate)
     values (${c.id}, ${c.name}, ${c.group}, ${c.kind ?? "expense"}, ${c.oneOff ?? false},
-            ${c.cadenceMonths ?? 1}, ${c.targetMonthly ?? null}, ${c.confirmedMonthlyRate ?? null})
+            ${c.cadence?.unit ?? "month"}, ${c.cadence?.count ?? 1},
+            ${c.targetMonthly ?? null}, ${c.confirmedMonthlyRate ?? null})
     on conflict (id) do update set
       name = excluded.name,
       "group" = excluded."group",
       kind = excluded.kind,
       one_off = excluded.one_off,
-      cadence_months = excluded.cadence_months,
+      cadence_unit = excluded.cadence_unit,
+      cadence_count = excluded.cadence_count,
       target_monthly = excluded.target_monthly,
       confirmed_monthly_rate = excluded.confirmed_monthly_rate`;
 }
@@ -54,7 +60,7 @@ export async function setCategorySettings(
   patch: {
     targetMonthly?: number | null;
     confirmedMonthlyRate?: number | null;
-    cadenceMonths?: number;
+    cadence?: Cadence;
     oneOff?: boolean;
   },
 ) {
@@ -65,8 +71,8 @@ export async function setCategorySettings(
   if (patch.confirmedMonthlyRate !== undefined) {
     await sql`update categories set confirmed_monthly_rate = ${patch.confirmedMonthlyRate} where id = ${id}`;
   }
-  if (patch.cadenceMonths !== undefined) {
-    await sql`update categories set cadence_months = ${patch.cadenceMonths} where id = ${id}`;
+  if (patch.cadence !== undefined) {
+    await sql`update categories set cadence_unit = ${patch.cadence.unit}, cadence_count = ${patch.cadence.count} where id = ${id}`;
   }
   if (patch.oneOff !== undefined) {
     await sql`update categories set one_off = ${patch.oneOff} where id = ${id}`;
@@ -332,8 +338,8 @@ export async function recordUpload(parsed: number, inserted: number, skipped: nu
 export async function seedCategories() {
   for (const c of CATEGORIES) {
     await db()`
-      insert into categories (id, name, "group", kind, one_off, cadence_months)
-      values (${c.id}, ${c.name}, ${c.group}, ${c.kind}, ${c.oneOff}, ${c.cadenceMonths})
+      insert into categories (id, name, "group", kind, one_off, cadence_unit, cadence_count)
+      values (${c.id}, ${c.name}, ${c.group}, ${c.kind}, ${c.oneOff}, ${c.cadence.unit}, ${c.cadence.count})
       on conflict (id) do nothing`;
   }
 }
