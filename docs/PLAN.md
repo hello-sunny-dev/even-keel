@@ -166,6 +166,59 @@ tab on `/add` with PDF second. This changes the product more than any feature in
 
 ---
 
+## Importing several statements at once — not a convenience, a requirement
+
+Bills do not share a rhythm: water and electricity here arrive roughly every 2 months,
+some services quarterly, rates annually, and **income is fortnightly**. None of that is
+visible in one statement. Cadence cannot be detected, a trailing average cannot be
+trusted, and `recurringMonthlyRate` has nothing to work with until several periods are
+in. So multi-file import is what makes the recurring math mean anything.
+
+**How it works**
+
+1. The client picks N files and uploads them **one request per file**. Vercel caps a
+   request body at 4.5 MB and that is per request, not per file — several statements in
+   one POST would fail as an opaque 413.
+2. Each file is parsed in memory and returns rows plus per-file metadata: statement
+   period, opening and closing balance, `skipped`, `warnings`.
+3. Rows from every file merge into **one** confirm table, sorted by date, with a source
+   column so a suspicious row can be traced back to its file.
+4. **Cross-file dedupe before display.** Consecutive statements overlap at their
+   boundaries and the same transaction genuinely appears twice. Dedupe on
+   `source_fingerprint` across the whole batch, and mark which file each survivor came from.
+5. **Balance chaining — a real integrity check that only exists with multiple files.**
+   Sort by period; statement N's opening balance must equal statement N−1's closing
+   balance. A mismatch means either a missing statement ("nothing covers 1 May – 30 Jun")
+   or an overlap, and the app says which. Combined with the per-file
+   opening→closing reconciliation, a silently dropped row has nowhere left to hide.
+6. The batch imports as **one transaction under one `upload_id`**, so undo removes the
+   whole batch, not one file of five.
+
+**Cadence is detected, not declared.** With history, intervals between charges from the
+same merchant give it away: take the median gap in days and snap to 14 / 30 / 61 / 91 /
+365. The user's manual override stays, but it stops being the only source.
+
+## Fortnightly breaks `cadence_months`, and it breaks the month scoring too
+
+`cadenceMonths: number` cannot express a fortnight, and Australian pay usually is one.
+Two separate problems:
+
+- **Modelling.** Replace `cadence_months` with `cadence_unit ('day'|'week'|'month')` +
+  `cadence_count`. Fortnightly = `(week, 2)`, monthly = `(month, 1)`, bimonthly =
+  `(month, 2)`, annual = `(month, 12)`. A monthly run rate for a fortnightly item is
+  `amount × 26 ÷ 12`, not `amount × 2`.
+- **Scoring.** Most months hold two pays; **twice a year a month holds three**. That
+  month clears every scenario and its neighbours look worse, for reasons that have
+  nothing to do with spending. The dashboard must not present that as a good month
+  silently. Detect the pay cadence from income rows, count the cycles that landed in the
+  month, and **annotate** — "3 pay cycles this month" / "2 pay cycles" — rather than
+  smoothing it away. Smoothing hides the one thing worth knowing; a label explains the
+  spike in a way that survives being looked at six months later.
+
+Tests: `cadence.test.ts` (fortnightly → monthly rate; median-gap detection across
+14/30/61/365-day series) and `paycycles.test.ts` (a 3-pay month is flagged, and its
+scenario verdict carries the annotation).
+
 ## Screens
 
 | Route | Content |
@@ -173,7 +226,7 @@ tab on `/add` with PDF second. This changes the product more than any feature in
 | `/login` | **Even Keel · Net worth for two.** Two seeded accounts. No registration, ever. |
 | `/` **Dashboard** | Period selector (year + month). Goal strip (cash + net worth, % there, expected-by-now marker, on-track pill, sparkline). **Defense / Offense band.** **12-month bar strip** — height = saved, green cleared / red short; the chart *is* the navigation. Income / spent / actual saved → **scenario ladder** (all three) → category breakdown. **First-run state** when there is no data: three steps (set goals → add accounts + balances → import). |
 | `/transactions` | **The ledger.** Month filter, text search, tap to edit category / one-off / kind, multi-select → bulk assign, delete, undo. Without this, month 3 is "it tagged 40 things wrong and I can fix them one at a time from a queue." |
-| `/add` | **CSV** (if it exports CSV) → **PDF** → **one transaction** → **whole month**. PDF and CSV both land in the editable confirm table; nothing is written until Import. The month form pre-fills last month's value per row with a "same as last month" action, and shows only categories with history plus "+ other". |
+| `/add` | **CSV** (if it exports CSV) → **PDF** → **one transaction** → **whole month**. CSV and PDF accept **several files at once**, uploaded one request each, merged into one editable confirm table with a source column, deduped across files, with the balance-chaining check reported before Import. Nothing is written until Import, and the batch shares one `upload_id` so undo is one action. The month form pre-fills last month's value per row with a "same as last month" action, and shows only categories with history plus "+ other". |
 | `/review` | Tagging queue. On tag: *"Apply to 6 other transactions from WOOLWORTHS?"* (default yes) — one `update … where merchant_key = $1`. Split into parts. |
 | `/one-offs` | One-off costs for the month, month-total rows included and labelled. |
 | `/trends` | Income vs recurring; recurring by group; cumulative net cash flow; cash projection. |
@@ -197,10 +250,10 @@ decoration and two households collide on a shared merchant.
 - **`households`** — `name, display_currency, locale`
 - **`users`** — `household_id, email, display_name, password_hash, session_version, role`
 - **`login_attempts`** — `identifier, ip, attempted_at` (rate limiting must survive cold starts)
-- **`categories`** — `name, group, kind, one_off, cadence_months, target_monthly, confirmed_monthly_rate, archived`. Archived categories stay **loadable for display** so old rows keep their name.
+- **`categories`** — `name, group, kind, one_off, cadence_unit ('day'|'week'|'month'), cadence_count, target_monthly, confirmed_monthly_rate, archived`. Archived categories stay **loadable for display** so old rows keep their name.
 - **`rules`** — `pattern, category_id, match_type, source, priority`
 - **`transactions`** — `txn_date, month, description, merchant_key, amount, currency, balance, kind ('income'|'expense'|'transfer'), transfer_account_id, category_id, one_off_override, needs_review, source ('csv'|'pdf'|'manual'), granularity ('transaction'|'month'), source_fingerprint, upload_id, deleted_at, split_parent_id, is_split_parent`
-- **`uploads`** — `uploaded_at, kind, parsed_count, inserted_count, skipped_count`. `upload_id` on transactions makes **"undo this import"** a single soft-delete by id.
+- **`uploads`** — `uploaded_at, kind, file_count, parsed_count, inserted_count, skipped_count`. One row per *batch*, not per file; `upload_id` on transactions makes **"undo this import"** a single soft-delete by id. No filenames.
 - **`accounts`** — `name, kind ('cash'|'investment'|'super'|'property'|'loan'), owner_user_id, currency, bucket ('available'|'invested'|'locked')`. Loan balances are stored **as amount owed, positive**, negated by kind — stated in the form label and a check constraint, because otherwise the two of them will enter it opposite ways.
 - **`balances`** — `account_id, month, amount`, unique `(account_id, month)`
 - **`goals`** — `kind ('cash'|'net_worth'), target_amount, target_months, opening_balance, annual_rate, active`
@@ -226,8 +279,10 @@ Reordered so the riskiest unknown is hit first and the two of them can use it ea
    `docs/*`. Fix **B4** (dates). *Jamie runs the dump script on a real statement.*
 2. **Parser hardening from what the dump shows** — font-size-relative gap, reconciliation
    check, warnings surfaced. Fix **B2** (fingerprint). CSV importer if the bank exports CSV.
+   Cadence model (`cadence_unit`/`cadence_count`) and median-gap detection.
 3. **Minimal schema + migrations + `Db` port** (single household row, shared password
-   kept for now) + import with the editable confirm table, atomic and undoable.
+   kept for now) + **multi-file import** with the editable confirm table: per-file upload,
+   cross-file dedupe, balance chaining, one atomic undoable batch.
 4. **`/transactions` ledger** — search, edit, bulk assign, undo.
 5. **`/review`** — tagging with retroactive apply, split.
 6. **Dashboard** — first-run state, period selector, goal strip, defense/offense band,
