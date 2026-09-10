@@ -20,7 +20,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { extractPdfLines } from "../src/lib/parse/pdf";
 import { parseStatementText, type ParseResult } from "../src/lib/parse/statement";
-import { redactDescription } from "../src/lib/redact";
+import { redactPersonal } from "../src/lib/redact";
 import { formatAUD } from "../src/lib/money";
 import { accountOf, safeName } from "../src/lib/parse/filenames";
 
@@ -100,9 +100,9 @@ async function diagnose(path: string): Promise<Summary> {
   }
 
   if (!quiet) {
-    rule(`RECONSTRUCTED LINES (${lines.length}) — redacted, safe to share`);
+    rule(`RECONSTRUCTED LINES (${lines.length}) — account numbers, names and addresses removed`);
     lines.forEach((line, i) =>
-      console.log(String(i + 1).padStart(4) + "  " + redactDescription(line)),
+      console.log(String(i + 1).padStart(4) + "  " + redactPersonal(line)),
     );
   }
 
@@ -112,7 +112,7 @@ async function diagnose(path: string): Promise<Summary> {
   for (const t of result.transactions) {
     console.log(
       `${t.date}  ${formatAUD(t.amount, { cents: true }).padStart(12)}  ` +
-        `${String(t.signSource).padEnd(8)}  ${redactDescription(t.description)}`,
+        `${String(t.signSource).padEnd(8)}  ${redactPersonal(t.description)}`,
     );
   }
 
@@ -143,7 +143,7 @@ async function diagnose(path: string): Promise<Summary> {
 
   if (result.skipped.length) {
     rule(`SKIPPED — dated lines carrying no amount (${result.skipped.length})`);
-    result.skipped.forEach((line) => console.log("  " + redactDescription(line)));
+    result.skipped.forEach((line) => console.log("  " + redactPersonal(line)));
   }
 
   if (result.warnings.length) {

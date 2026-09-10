@@ -29,6 +29,43 @@ export function redactDescription(raw: string): string {
     .trim();
 }
 
+/**
+ * Who the statement is addressed to, and where they live.
+ *
+ * `redactDescription` handles numbers — account, BSB, card. It was never
+ * looking at the header block, where a statement prints the account holders'
+ * names and their home address in plain text. That is not a number, so nothing
+ * caught it, and the diagnostic script printed it under the words "safe to
+ * share".
+ *
+ * Deliberately blunt: over-redacting a header costs a diagnostic nothing,
+ * while under-redacting it puts somebody's address in a chat log.
+ */
+const PERSONAL: [RegExp, string][] = [
+  // "Mr Alex Morgan & Mrs Robin Lee"
+  [/\b(?:mr|mrs|ms|miss|dr|prof)\b\.?\s+[^,\n]{0,60}/gi, "[name]"],
+  // "12 Sample Approach", "3/25 Wellington St"
+  [
+    /\b\d+[a-z]?(?:\s*\/\s*\d+)?\s+[A-Za-z' ]{2,30}\s(?:approach|street|st|road|rd|avenue|ave|drive|dr|way|court|ct|place|pl|crescent|cres|parade|pde|lane|ln|terrace|tce|boulevard|blvd|close|circuit|cct|grove|gr|rise|loop|entrance|ent|gardens|gdns|highway|hwy)\b\.?/gi,
+    "[address]",
+  ],
+  // "NORTHSIDE, WA 6000" — suburb, state, postcode.
+  [/\b[A-Za-z' ]{2,30},?\s+(?:WA|NSW|VIC|QLD|SA|TAS|NT|ACT)\s+\d{4}\b/g, "[suburb]"],
+];
+
+/**
+ * Everything `redactDescription` removes, plus names and addresses.
+ *
+ * For output a person is going to read and paste somewhere. Not used on the
+ * persist path: a merchant's own suburb is part of its name there, and
+ * stripping it would break the merchant key that categorisation rules match on.
+ */
+export function redactPersonal(raw: string): string {
+  let out = redactDescription(raw);
+  for (const [re, sub] of PERSONAL) out = out.replace(re, sub);
+  return out.replace(/\s+/g, " ").trim();
+}
+
 /** Statement-wide sweep, used on any text that might be surfaced or logged. */
 export function redactText(raw: string): string {
   return raw
