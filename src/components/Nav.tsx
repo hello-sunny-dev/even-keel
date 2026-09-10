@@ -19,6 +19,9 @@ const ITEMS = [
 export function Nav() {
   const pathname = usePathname();
 
+  // Nothing to navigate to until you are through the gate.
+  if (pathname === "/login") return null;
+
   return (
     <nav className="border-rule bg-paper/95 fixed inset-x-0 bottom-0 z-20 border-t backdrop-blur sm:static sm:border-t-0 sm:border-b sm:bg-transparent sm:backdrop-blur-none">
       <div className="mx-auto flex max-w-5xl items-center gap-1 px-4 py-2 sm:px-6">
