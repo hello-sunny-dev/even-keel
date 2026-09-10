@@ -21,6 +21,7 @@ const PRIMARY = [
 
 const MORE = [
   { href: "/transactions", label: "Ledger" },
+  { href: "/assets", label: "Net worth" },
   { href: "/goals", label: "Goals" },
   { href: "/settings", label: "Settings" },
 ];

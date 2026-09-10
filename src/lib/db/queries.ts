@@ -2,6 +2,7 @@ import type { Txn } from "../aggregate";
 import type { Cadence } from "../cadence";
 import { CATEGORIES, type Category } from "../categories";
 import type { Goal, SavingsScenario } from "../goals";
+import type { Account, Balance } from "../networth";
 import type { Rule, RuleMatchType, RuleSource } from "../rules";
 import type { Db } from "./port";
 
@@ -625,4 +626,89 @@ export async function saveSavingsPlans(
       );
     }
   });
+}
+
+/* ------------------------------------------------- accounts and balances */
+
+export async function listAccounts(db: Db, household: string): Promise<Account[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select id::text, name, kind, bucket, currency, archived
+       from accounts
+      where household_id = $1
+      order by archived, kind, name`,
+    [household],
+  );
+
+  return rows.map((r) => ({
+    id: String(r.id),
+    name: String(r.name),
+    kind: r.kind as Account["kind"],
+    bucket: r.bucket as Account["bucket"],
+    currency: String(r.currency),
+    archived: Boolean(r.archived),
+  }));
+}
+
+// Not `createAccount`: `auth-server.ts` already has one of those for a person.
+// A route that needed both would have to rename one at the import, and the two
+// meanings of "account" in a finance app are worth keeping apart by name.
+export async function addAccount(
+  db: Db,
+  household: string,
+  account: { name: string; kind: Account["kind"]; bucket: Account["bucket"]; currency?: string },
+): Promise<string> {
+  const rows = await db.query<{ id: string }>(
+    `insert into accounts (household_id, name, kind, bucket, currency)
+     values ($1, $2, $3, $4, $5) returning id::text`,
+    [household, account.name, account.kind, account.bucket, account.currency ?? "AUD"],
+  );
+  return rows[0].id;
+}
+
+/** Archived, never deleted: the balances it carries are the history. */
+export async function archiveAccount(db: Db, household: string, id: string): Promise<void> {
+  await db.query(`update accounts set archived = true where household_id = $1 and id = $2`, [
+    household,
+    id,
+  ]);
+}
+
+export async function listBalances(db: Db, household: string): Promise<Balance[]> {
+  const rows = await db.query<Record<string, unknown>>(
+    `select b.account_id::text as account_id, b.month,
+            b.amount::float8 as amount,
+            b.contributed::float8 as contributed
+       from balances b
+       join accounts a on a.id = b.account_id
+      where a.household_id = $1
+      order by b.month`,
+    [household],
+  );
+
+  return rows.map((r) => ({
+    accountId: String(r.account_id),
+    month: String(r.month),
+    amount: Number(r.amount),
+    contributed: Number(r.contributed),
+  }));
+}
+
+/**
+ * One figure per account per month, replaced when it is entered again.
+ *
+ * Scoped through the account's household in the same statement rather than
+ * checked first: a balance carries no household of its own, and a separate
+ * check is a race and an easy thing to forget at the next call site.
+ */
+export async function setBalance(db: Db, household: string, balance: Balance): Promise<boolean> {
+  const rows = await db.query<{ id: string }>(
+    `insert into balances (account_id, month, amount, contributed)
+     select a.id, $3, $4, $5 from accounts a
+      where a.id = $2 and a.household_id = $1
+     on conflict (account_id, month)
+       do update set amount = excluded.amount, contributed = excluded.contributed
+     returning id::text`,
+    [household, balance.accountId, balance.month, balance.amount, balance.contributed],
+  );
+  return rows.length > 0;
 }

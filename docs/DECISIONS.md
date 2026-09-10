@@ -219,3 +219,63 @@ as ten failures rather than as no data.
 **Consequence.** The window ends at the most recent month with data and never
 begins before the earliest, so bars can be clicked in both directions and every bar
 stands for a month that actually happened.
+
+---
+
+### 17. A balance is entered with what was added to it
+
+**Why.** Growth is the reason to track an investment account at all, and a balance
+alone cannot tell growth from a deposit. An account that went from $10,000 to
+$10,500 either earned $500 or was paid $500 in — opposite facts about the same
+number, and the difference between "our investments are working" and "we saved
+harder". The plumbing that could infer it, a transfer tagged with its destination
+account, does not exist yet and would not cover money moved outside the imported
+account anyway.
+
+**Consequence.** `balances.contributed` sits beside `balances.amount`: one more
+field on a form somebody is already filling in, answered by the person who knows.
+Growth is `closing − opening − contributed`, and only ever between two snapshots
+that actually exist.
+
+**Also considered.** Deriving contributions from transfers. Not rejected — it is
+the better answer once transfers carry a destination, and this field stays as the
+correction for anything it misses.
+
+---
+
+### 18. A skipped month never becomes a loss and then a gain
+
+**Why.** The spreadsheet did this: March $10,000, no April entry, May $11,000. Read
+month to month, April is a $10,000 loss and May an $11,000 gain. Both are fiction,
+and they average out to something that looks plausible.
+
+**Consequence.** A month with no entry carries the last figure forward and is marked
+`estimated`, so a total is never presented as fresh when it is not. Growth is
+measured between real snapshots with every contribution in the span subtracted, so
+skipping April just widens the span from March to May.
+
+---
+
+### 19. Nothing recorded is not the same as nothing owned
+
+**Why.** Reading a month from before the household started entering balances, every
+bucket sums to zero, the goal reports 0% and the verdict reads _Behind_. That is a
+claim about wealth made entirely out of missing data — and the most discouraging
+possible screen to show someone on the day they start.
+
+**Consequence.** `netWorthAt` returns `counted`, the number of accounts that had a
+figure to give. At zero the goal is not scored at all and the screen says which
+month has no balances, with a link to enter them.
+
+---
+
+### 20. A loan is stored as what is owed, positive
+
+**Why.** Two people entering the same mortgage will otherwise enter it two ways, and
+a $480,000 debt typed as a negative is *added* to net worth — a $960,000 error that
+looks like good news.
+
+**Consequence.** Positive, negated when summed. Said in the form label, enforced by
+a trigger, and answered with a sentence rather than a constraint name. Interest on
+a loan is reported as negative growth, because interest costs net worth: a
+repayment is a contribution, not a gain.
