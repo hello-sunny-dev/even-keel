@@ -98,7 +98,11 @@ export function AccountRow({
   const loan = account.kind === "loan";
   const fresh = latest?.month === month;
 
-  const [amount, setAmount] = useState(fresh ? String(latest!.amount) : "");
+  // Prefilled with the figure being carried forward, so a month where nothing
+  // moved — a house valuation, usually — is one click rather than retyping six
+  // digits, which is where the typos come from. What was put in is not carried:
+  // that is a fact about a month, not a running total.
+  const [amount, setAmount] = useState(latest ? String(latest.amount) : "");
   const [contributed, setContributed] = useState(fresh ? String(latest!.contributed) : "");
   const [message, setMessage] = useState<{ text: string; bad: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -187,7 +191,7 @@ export function AccountRow({
           disabled={busy || amount === ""}
           className="border-rule-strong rounded-lg border px-3 py-1.5 text-sm disabled:opacity-40"
         >
-          {busy ? "Saving…" : fresh ? "Update" : "Save"}
+          {busy ? "Saving…" : fresh ? "Update" : latest ? "Confirm for this month" : "Save"}
         </button>
         {message && (
           <span

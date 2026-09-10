@@ -632,10 +632,22 @@ export async function saveSavingsPlans(
 
 export async function listAccounts(db: Db, household: string): Promise<Account[]> {
   const rows = await db.query<Record<string, unknown>>(
+    // Assets first and the debt last, in the order someone would read them
+    // out: what is reachable, then what is not, then what is owed. Ordering by
+    // the kind's name instead puts the mortgage between the ETFs and the
+    // house, which is alphabetical and meaningless.
     `select id::text, name, kind, bucket, currency, archived
        from accounts
       where household_id = $1
-      order by archived, kind, name`,
+      order by archived,
+               case kind
+                 when 'cash' then 1
+                 when 'investment' then 2
+                 when 'super' then 3
+                 when 'property' then 4
+                 when 'loan' then 5
+               end,
+               name`,
     [household],
   );
 
