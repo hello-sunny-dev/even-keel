@@ -411,9 +411,14 @@ export async function applyToMerchantHistory(
   if (!merchantKey) return 0;
   const condition = opts.includeTagged ? "" : " and category_id is null";
   const rows = await db.query<{ id: string }>(
+    // Split parents are excluded here and in the count below. A parent has no
+    // category by design — its children carry them — so it looks untagged to
+    // any query that only asks about `category_id`, which made the offer to
+    // fix a merchant's history say "2 others" when there was one.
     `update transactions
         set category_id = $3, needs_review = false
-      where household_id = $1 and merchant_key = $2 and deleted_at is null${condition}
+      where household_id = $1 and merchant_key = $2 and deleted_at is null
+        and not is_split_parent${condition}
       returning id::text`,
     [household, merchantKey, categoryId],
   );
@@ -427,7 +432,8 @@ export async function countMerchantHistory(
 ): Promise<number> {
   const rows = await db.query<{ n: number }>(
     `select count(*)::int as n from transactions
-      where household_id = $1 and merchant_key = $2 and category_id is null and deleted_at is null`,
+      where household_id = $1 and merchant_key = $2 and category_id is null
+        and deleted_at is null and not is_split_parent`,
     [household, merchantKey],
   );
   return Number(rows[0]?.n ?? 0);
