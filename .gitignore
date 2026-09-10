@@ -44,3 +44,4 @@ next-env.d.ts
 # The folder is kept so the local-only fixture tests have somewhere to look.
 /test-fixtures/real/*
 !/test-fixtures/real/.gitkeep
+.pglite/

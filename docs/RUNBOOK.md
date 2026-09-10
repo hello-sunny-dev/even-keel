@@ -6,12 +6,17 @@
 nvm use                 # Node 22
 npm install             # also installs the pre-commit hook
 cp .env.example .env.local
-npm test                # should pass with no database configured
-npm run dev
+npm test                # 92 tests, no database or network needed
 ```
 
-`DATABASE_URL` can stay empty while working on parsing and the pure logic — the tests use
-an in-process PGlite database, and the app renders a setup notice instead of crashing.
+**The interface does not exist yet.** Only API routes are built, so `npm run dev` starts
+a server where `/` is a 404. That is expected until the screens land — see the commit
+sequence in `PLAN.md`. What is worth running today is the test suite and the statement
+diagnostic below.
+
+`DATABASE_URL` can stay empty. Tests use an in-process PGlite database, and `npm run
+db:setup` falls back to a local PGlite database under `.pglite/`, so a fresh clone needs
+no Postgres to do anything.
 
 ## Diagnosing a real statement
 
