@@ -314,3 +314,43 @@ double-pressed button write two rows.
 save. Pressing the button twice writes one row; entering the same thing again a
 minute later writes a second. Verified in a browser: two identical entries, two
 rows.
+
+---
+
+### 23. Minimise what is stored, rather than encrypt it
+
+**Why.** The merchant name is the one piece of a transaction the app cannot do
+without — categorisation, rules, the review queue and every chart are built on it.
+Encrypting the description column would make all of that impossible, so
+column-level encryption buys nothing here and costs the product. Disk-level
+encryption at rest is the hosting provider's job and is already on.
+
+**Consequence.** The rule is minimisation: keep the merchant, remove everything
+that identifies a person. That means account, BSB and card numbers (always did),
+customer reference numbers glued to a name (`Oriene1000000001` — these were
+getting through), and the household's own names where a statement prints them
+(`Osko Deposit - Receipt R Lee & A Morgan`).
+
+Names are removed by asking the household who its members are rather than by
+detecting names generally, which would take "Harbour Cafe By Leeson" and
+"Leeward Sushi" with it.
+
+**Also considered.** Storing a hash of the description and keeping the text only
+in the browser. Rejected: the review queue, search and retroactive tagging all
+need the text on the server, and a hash cannot be read by the person trying to
+work out what a charge was.
+
+---
+
+### 24. Removing reference numbers is a correctness fix, not only a privacy one
+
+**Why.** `Direct Debit - Receipt Origin Energy Ho Oriene1000000001 To` — that
+reference changes every month. It was part of the merchant key, so April's key
+and June's key were different strings, and a rule created by tagging April could
+never match June. Every recurring direct debit — energy, insurance, the vet, the
+gym — would have landed in the review queue every month for ever, and the symptom
+is a queue that will not empty rather than anything that looks like a bug.
+
+**Consequence.** The same edit fixes both. Six digits is the threshold, not four,
+so `COLES 0292` and `BUNNINGS 2174` keep their store numbers: those identify a
+shop, not a person, and they are stable month to month.

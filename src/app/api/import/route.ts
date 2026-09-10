@@ -18,6 +18,8 @@ import {
   recordUpload,
   finishUpload,
 } from "@/lib/db/queries";
+import { listHouseholdMembers } from "@/lib/auth-server";
+import { nameStripper } from "@/lib/redact";
 import { requireSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -44,6 +46,8 @@ export async function POST(request: Request) {
   const { db, household: id } = await requireSession();
   const rules = await listUserRules(db, id);
   const categories = await categoryMap(db, id);
+  const members = await listHouseholdMembers(db, id);
+  const stripNames = nameStripper(members.map((m) => m.displayName));
 
   // The bytes stay in memory and go out of scope with this request. They are
   // never written to disk or to the database.
@@ -62,7 +66,9 @@ export async function POST(request: Request) {
 
   const parsed = parseStatementText(lines.join("\n"));
   const report = reportFor(parsed, file.name);
-  const proposed = markDuplicatesWithin(proposeFrom(parsed, file.name, categories, rules));
+  const proposed = markDuplicatesWithin(
+    proposeFrom(parsed, file.name, categories, rules, stripNames),
+  );
 
   const existing = await db.query<{ source_fingerprint: string }>(
     `select source_fingerprint from transactions

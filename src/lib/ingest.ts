@@ -1,4 +1,5 @@
 import { effectiveKind } from "./aggregate";
+import { merchantKey } from "./redact";
 import { categorize } from "./categorize";
 import { lookUp, type Categories } from "./categories";
 import type { InsertableTransaction } from "./db/queries";
@@ -44,8 +45,14 @@ export function proposeFrom(
   sourceFile: string,
   categories: Categories,
   rules: Rule[] = [],
+  /**
+   * Removes the household's own names before anything is stored. A transfer
+   * between people prints who sent it, and nobody needs their own name in
+   * three hundred rows of their own ledger.
+   */
+  stripNames: (text: string) => string = (text) => text,
 ): ProposedTransaction[] {
-  return result.transactions.map((t) => propose(t, sourceFile, categories, rules));
+  return result.transactions.map((t) => propose(t, sourceFile, categories, rules, stripNames));
 }
 
 function propose(
@@ -53,8 +60,10 @@ function propose(
   sourceFile: string,
   categories: Categories,
   rules: Rule[],
+  stripNames: (text: string) => string,
 ): ProposedTransaction {
-  const match = categorize(t.description, categories, rules);
+  const description = stripNames(t.description) || t.description;
+  const match = categorize(description, categories, rules);
   const categoryId = match.status === "matched" ? match.categoryId : null;
   const category = lookUp(categories, categoryId);
 
@@ -62,8 +71,8 @@ function propose(
     sourceFingerprint: t.sourceFingerprint,
     date: t.date,
     month: t.month,
-    description: t.description,
-    merchantKey: t.merchantKey,
+    description,
+    merchantKey: merchantKey(description),
     amount: t.amount,
     balance: t.balance,
     categoryId,

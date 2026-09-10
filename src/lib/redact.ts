@@ -13,10 +13,70 @@ const PATTERNS: [RegExp, string][] = [
   // BSB / account references, with or without the label.
   [/\b(?:bsb|a\/?c|acct|account)\s*(?:no\.?|number)?\s*:?\s*[\d\s-]{5,}/gi, " "],
   [/\b\d{3}\s?-\s?\d{3}\b/g, " "],
-  // Any bare digit run long enough to identify an account. Dates and amounts
-  // are already parsed off the line before this runs.
-  [/\b\d{6,}\b/g, " "],
+  /**
+   * Any run of six or more digits, attached to letters or not.
+   *
+   * The word boundary this used to require meant a reference glued to a name
+   * survived: `Oriene1000000001`, `Petsur1000000003`, `ATO000000000000001` all
+   * reached the database intact. They are customer reference numbers — the
+   * thing this function exists to remove.
+   *
+   * The same change fixes categorisation, because those references change
+   * every month: the merchant key for an Origin Energy bill was
+   * `ENERGY HO ORIENE1000000001` in one month and a different string the next,
+   * so a rule created in April could never match May. Every recurring direct
+   * debit was landing in the review queue forever.
+   *
+   * Six, not four, so a store number survives — `COLES 0292` and `COLES 0485`
+   * are different shops and neither identifies a person.
+   */
+  [/\d{6,}/g, " "],
 ];
+
+/**
+ * The household's own names, as they appear in their own transactions.
+ *
+ * A transfer between people prints who sent it: "Osko Deposit - Receipt
+ * R Lee & A Morgan", "Ledger Tax INV-1000 Alex Morgan". Generic name
+ * detection would eat merchants — "Harbour Cafe By Leeson" is not a person —
+ * but a household knows exactly who its members are, so it can say. Given
+ * "Jamie Robin Lee" this removes "Robin Lee", "R Lee" and "Lee".
+ *
+ * Only surnames and initial-plus-surname: a first name alone is too likely to
+ * be a shop.
+ */
+export function nameStripper(fullNames: string[]): (text: string) => string {
+  const patterns: RegExp[] = [];
+
+  for (const full of fullNames) {
+    const parts = full
+      .split(/\s+/)
+      .map((p) => p.replace(/[^\p{L}'-]/gu, ""))
+      .filter((p) => p.length > 1);
+    if (parts.length === 0) continue;
+
+    const surname = parts[parts.length - 1];
+    const initials = parts.slice(0, -1).map((p) => p[0]);
+    const escaped = surname.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    // "R Lee", "Robin Lee", "A Morgan" — a given name or initial, then the
+    // surname. Matched first so the surname-only rule does not cut it short.
+    for (const part of [...parts.slice(0, -1), ...initials]) {
+      const given = part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      patterns.push(new RegExp(`\\b${given}\\.?\\s+${escaped}\\b`, "gi"));
+    }
+    patterns.push(new RegExp(`\\b${escaped}\\b`, "gi"));
+  }
+
+  return (text: string) => {
+    let out = text;
+    for (const re of patterns) out = out.replace(re, " ");
+    return out
+      .replace(/\s+/g, " ")
+      .replace(/\s+&\s*$/, "")
+      .trim();
+  };
+}
 
 /** Strip account/BSB/card numbers and squash the leftover whitespace. */
 export function redactDescription(raw: string): string {
