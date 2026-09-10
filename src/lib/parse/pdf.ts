@@ -16,22 +16,52 @@ type TextItem = {
   hasEOL?: boolean;
 };
 
+/**
+ * Resolve a package file without depending on this module's own URL.
+ *
+ * Under `tsx` — which is how `npm run dump` runs — a module can be handed to
+ * Node as a `data:` URL carrying the transpiled source. Anything resolved
+ * relative to `import.meta.url` then fails with "Invalid relative URL or base
+ * scheme is not hierarchical", including a bare dynamic `import()`, because a
+ * data: URL is not a location anything can be relative to.
+ *
+ * The working directory is a real path in every case that matters — the dev
+ * server, the built server, a script — so it is the fallback.
+ */
+export function resolveFrom(
+  specifier: string,
+  bases: string[] = [import.meta.url, pathToFileURL(join(process.cwd(), "package.json")).href],
+): string | null {
+  for (const base of bases) {
+    try {
+      return createRequire(base).resolve(specifier);
+    } catch {
+      // Either the base is unusable or the package is not installed there.
+      // Try the next one; the caller decides what a total failure means.
+    }
+  }
+  return null;
+}
+
 let pdfjsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null = null;
 
 function loadPdfjs() {
-  pdfjsPromise ??= import("pdfjs-dist/legacy/build/pdf.mjs");
+  // Imported by absolute file URL rather than by name, so the specifier never
+  // needs a base to be resolved against.
+  pdfjsPromise ??= (async () => {
+    const entry = resolveFrom("pdfjs-dist/legacy/build/pdf.mjs");
+    if (!entry) throw new Error("pdfjs-dist is not installed — run `npm install`.");
+    return import(pathToFileURL(entry).href) as Promise<
+      typeof import("pdfjs-dist/legacy/build/pdf.mjs")
+    >;
+  })();
   return pdfjsPromise;
 }
 
 /** pdfjs needs the 14 base fonts on disk to measure glyphs it does not embed. */
 function standardFontDataUrl(): string | undefined {
-  try {
-    const require = createRequire(import.meta.url);
-    const pkg = require.resolve("pdfjs-dist/package.json");
-    return pathToFileURL(join(dirname(pkg), "standard_fonts/")).href;
-  } catch {
-    return undefined;
-  }
+  const pkg = resolveFrom("pdfjs-dist/package.json");
+  return pkg ? pathToFileURL(join(dirname(pkg), "standard_fonts/")).href : undefined;
 }
 
 /**

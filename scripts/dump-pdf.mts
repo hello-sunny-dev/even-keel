@@ -82,7 +82,17 @@ async function diagnose(path: string): Promise<Summary> {
   } catch (error) {
     const message = (error as Error).message;
     console.error(`\nCould not read this PDF: ${message}`);
-    console.error("If it is password-protected, save an unprotected copy and try again.");
+    // The hint has to match the failure. Telling somebody their statement is
+    // password-protected when the real problem is that pdfjs could not be
+    // loaded sends them looking at the wrong thing entirely.
+    if (/password/i.test(message)) {
+      console.error("It is password-protected — save an unprotected copy and try again.");
+    } else if (/resolve module|not hierarchical|Cannot find module/i.test(message)) {
+      console.error(
+        "That is this script failing to load pdfjs, not a problem with the PDF. " +
+          "Run `npm install`, and run this from the repository root.",
+      );
+    }
     return { name, result: null, error: message, drift: null };
   }
 
