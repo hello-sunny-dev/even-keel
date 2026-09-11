@@ -160,12 +160,19 @@ function takeTrailingAmount(line: string): Tail | null {
   const trailingMinus = m[3] === "-";
   const sign = m[1] === "-" || trailingMinus ? "-" : m[1] === "+" ? "+" : null;
   const value = Number(m[2].replace(/,/g, ""));
+  const crdr = m[4] ? (m[4].toUpperCase() as "CR" | "DR") : null;
+  // A loan statement says a balance is negative by writing DR after it rather
+  // than a minus in front of it. `signed` is only ever read for a balance, so
+  // taking the marker into account here is what stops the running balance
+  // coming back positive — and with it every sign on the statement, since the
+  // amounts take their sign from how the balance moved.
+  const negative = sign === "-" || crdr === "DR";
   return {
     rest: line.slice(0, m.index).trimEnd(),
     value,
-    signed: sign === "-" ? -value : value,
+    signed: negative && value !== 0 ? -value : value,
     explicitSign: sign as "-" | "+" | null,
-    crdr: m[4] ? (m[4].toUpperCase() as "CR" | "DR") : null,
+    crdr,
   };
 }
 

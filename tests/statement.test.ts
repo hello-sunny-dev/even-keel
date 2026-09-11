@@ -329,3 +329,42 @@ describe("a summary block that prints figures above their labels", () => {
     expect(Object.is(parse(SUMMARY, { statementYear: 2026 }).openingBalance, -0)).toBe(false);
   });
 });
+
+describe("a loan statement that marks its balance DR instead of with a minus", () => {
+  // A home-loan drawdown, in the layout the bank prints.
+  // Read without the DR marker every sign on the statement inverts, and the
+  // drift comes back as exactly twice the closing balance.
+  const DRAWDOWN = [
+    "$0.00 DR 6.15% p.a.",
+    "Opening balance Current interest rate",
+    "16/02/2026 LMI FEES RECEIPT 6,712.43 6,712.43 DR",
+    "16/02/2026 OA ANNUAL FEE RECEIPT 299.00 7,011.43 DR",
+    "16/02/2026 SETTLEMENT FEE RECEIPT 350.00 7,361.43 DR",
+    "16/02/2026 SWIFT TRANSFER RECEIPT 386,250.00 393,611.43 DR",
+    "02/03/2026 TRANSFER RECEIPT 1,068.24 392,543.19 DR",
+    "$392,543.19 DR $1,426.37",
+    "Closing balance Interest paid this financial year",
+  ].join("\n");
+
+  it("reads the balances as owed", () => {
+    const result = parse(DRAWDOWN, { statementYear: 2026 });
+
+    expect(result.openingBalance).toBe(0);
+    expect(result.closingBalance).toBe(-392543.19);
+  });
+
+  it("makes a fee increase the debt and a transfer reduce it", () => {
+    const { transactions } = parse(DRAWDOWN, { statementYear: 2026 });
+
+    expect(transactions.map((t) => t.amount)).toEqual([-6712.43, -299, -350, -386250, 1068.24]);
+  });
+
+  it("reconciles", () => {
+    const result = parse(DRAWDOWN, { statementYear: 2026 });
+    const moved = result.transactions.reduce((sum, t) => sum + Math.round(t.amount * 100), 0);
+
+    expect(
+      Math.round(result.openingBalance! * 100) + moved - Math.round(result.closingBalance! * 100),
+    ).toBe(0);
+  });
+});
