@@ -141,7 +141,7 @@ export default async function OneOffs({
                           {t.granularity === "month" ? (
                             <>
                               {formatMonth(t.month, { long: true })} ·{" "}
-                              <span style={{ color: "var(--oneoff)" }}>month total</span>
+                              <span style={{ color: "var(--warn-text)" }}>month total</span>
                             </>
                           ) : (
                             t.date

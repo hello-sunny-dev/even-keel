@@ -57,8 +57,20 @@ export default async function Dashboard({
   // A household can track net worth without importing anything, so the page
   // falls back to the current month rather than to nothing at all when there
   // are no transactions but there are balances.
-  const month = requested && months.includes(requested) ? requested : (months[0] ?? thisMonth);
   const hasLedger = ledgerMonths.length > 0;
+  // Any month inside the ledger's span is selectable, not only the ones that
+  // have rows. The month strip is the navigation, and a bar that bounces the
+  // reader back to the newest month is a link that does nothing — a month
+  // between the first statement and the last with nothing in it is a real
+  // answer, and one worth being able to look at.
+  const selectable =
+    requested !== undefined &&
+    (months.includes(requested) ||
+      (hasLedger &&
+        /^\d{4}-(0[1-9]|1[0-2])$/.test(requested) &&
+        monthIndex(requested) >= monthIndex(ledgerMonths[ledgerMonths.length - 1]) &&
+        monthIndex(requested) <= monthIndex(ledgerMonths[0])));
+  const month = selectable ? requested : (months[0] ?? thisMonth);
 
   const cashGoal = goals.find((g) => g.kind === "cash");
   const netWorthGoal = goals.find((g) => g.kind === "net_worth");
@@ -135,11 +147,13 @@ export default async function Dashboard({
             defaultValue={month}
             className="border-rule-strong bg-sheet rounded-lg border px-3 py-2 text-sm"
           >
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {formatMonth(m, { long: true })}
-              </option>
-            ))}
+            {[...new Set([month, ...months])]
+              .sort((a, b) => b.localeCompare(a))
+              .map((m) => (
+                <option key={m} value={m}>
+                  {formatMonth(m, { long: true })}
+                </option>
+              ))}
           </select>
           <button type="submit" className="border-rule-strong rounded-lg border px-3 py-2 text-sm">
             Show

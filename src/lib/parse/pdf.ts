@@ -45,15 +45,32 @@ export function resolveFrom(
 
 let pdfjsPromise: Promise<typeof import("pdfjs-dist/legacy/build/pdf.mjs")> | null = null;
 
+/**
+ * The literal specifier first, the computed one only if it fails.
+ *
+ * A built server is bundled, and a bundler reads `import()` calls to decide
+ * what to include. Handed a computed specifier it cannot read, it leaves a
+ * stub that throws "Cannot find module as expression is too dynamic" at
+ * runtime — which reached the user as "That file could not be read as a PDF",
+ * on every statement, only in production. `next dev` did not bundle and so
+ * never showed it.
+ *
+ * A literal specifier it can read, and `serverExternalPackages` then leaves it
+ * as a plain runtime require of the installed package. The absolute file URL
+ * stays behind it for `npm run dump`, where tsx hands this module to Node as a
+ * `data:` URL and a bare specifier has no base to resolve against.
+ */
 function loadPdfjs() {
-  // Imported by absolute file URL rather than by name, so the specifier never
-  // needs a base to be resolved against.
   pdfjsPromise ??= (async () => {
-    const entry = resolveFrom("pdfjs-dist/legacy/build/pdf.mjs");
-    if (!entry) throw new Error("pdfjs-dist is not installed — run `npm install`.");
-    return import(pathToFileURL(entry).href) as Promise<
-      typeof import("pdfjs-dist/legacy/build/pdf.mjs")
-    >;
+    try {
+      return await import("pdfjs-dist/legacy/build/pdf.mjs");
+    } catch (error) {
+      const entry = resolveFrom("pdfjs-dist/legacy/build/pdf.mjs");
+      if (!entry) throw error;
+      return (await import(
+        pathToFileURL(entry).href
+      )) as typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+    }
   })();
   return pdfjsPromise;
 }

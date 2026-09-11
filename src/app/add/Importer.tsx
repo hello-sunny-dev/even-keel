@@ -7,6 +7,11 @@ import { formatAUD } from "@/lib/money";
 
 type Result = { report: FileReport; rows: ProposedTransaction[] };
 
+/** Parsed, but not going into the ledger — unticked, or already there. */
+function excluded(row: ProposedTransaction): boolean {
+  return !row.include || row.duplicate;
+}
+
 export function Importer({ categories }: { categories: Category[] }) {
   const [rows, setRows] = useState<ProposedTransaction[]>([]);
   const [reports, setReports] = useState<FileReport[]>([]);
@@ -125,7 +130,7 @@ export function Importer({ categories }: { categories: Category[] }) {
                 : `Off by ${formatAUD(report.drift, { cents: true })} — rows were dropped or misread.`}
           </p>
           {report.warnings.map((w) => (
-            <p key={w} className="mt-1 text-xs" style={{ color: "var(--oneoff)" }}>
+            <p key={w} className="mt-1 text-xs" style={{ color: "var(--warn-text)" }}>
               {w}
             </p>
           ))}
@@ -141,7 +146,7 @@ export function Importer({ categories }: { categories: Category[] }) {
               <span className="text-faint text-sm">{rows.length - keeping.length} skipped</span>
             )}
             {untagged > 0 && (
-              <span className="text-sm" style={{ color: "var(--oneoff)" }}>
+              <span className="text-sm" style={{ color: "var(--warn-text)" }}>
                 {untagged} untagged
               </span>
             )}
@@ -164,14 +169,15 @@ export function Importer({ categories }: { categories: Category[] }) {
               </thead>
               <tbody>
                 {rows.map((row) => (
-                  <tr
-                    key={row.sourceFingerprint}
-                    className="border-rule border-b"
-                    style={{ opacity: row.include && !row.duplicate ? 1 : 0.45 }}
-                  >
+                  // A row left out is struck through rather than faded: at
+                  // 45% opacity its own text drops under the contrast minimum,
+                  // and the reader still has to be able to read what they are
+                  // choosing not to import.
+                  <tr key={row.sourceFingerprint} className="border-rule border-b">
                     <td className="py-2 pr-3">
                       <input
                         type="checkbox"
+                        aria-label={`Import ${row.description} on ${row.date}`}
                         checked={row.include && !row.duplicate}
                         disabled={row.duplicate}
                         onChange={(e) =>
@@ -180,7 +186,7 @@ export function Importer({ categories }: { categories: Category[] }) {
                       />
                     </td>
                     <td className="tabular text-muted py-2 pr-3 whitespace-nowrap">{row.date}</td>
-                    <td className="py-2 pr-3">
+                    <td className={`py-2 pr-3 ${excluded(row) ? "text-muted line-through" : ""}`}>
                       {row.description}
                       {row.duplicate && (
                         <span className="text-faint ml-2 rounded border border-current px-1 text-[10px]">
@@ -190,6 +196,7 @@ export function Importer({ categories }: { categories: Category[] }) {
                     </td>
                     <td className="py-2 pr-3">
                       <select
+                        aria-label={`Category for ${row.description}`}
                         value={row.categoryId ?? ""}
                         onChange={(e) =>
                           update(row.sourceFingerprint, { categoryId: e.target.value || null })
@@ -207,6 +214,7 @@ export function Importer({ categories }: { categories: Category[] }) {
                     <td className="py-2 pr-3 text-center">
                       <input
                         type="checkbox"
+                        aria-label={`One-off: ${row.description}`}
                         checked={row.oneOff}
                         onChange={(e) =>
                           update(row.sourceFingerprint, { oneOff: e.target.checked })
@@ -215,6 +223,7 @@ export function Importer({ categories }: { categories: Category[] }) {
                     </td>
                     <td className="py-2 text-right">
                       <input
+                        aria-label={`Amount for ${row.description}`}
                         value={row.amount}
                         onChange={(e) =>
                           update(row.sourceFingerprint, { amount: Number(e.target.value) || 0 })

@@ -9,8 +9,15 @@
   --sheet: #f7f8f4;
   --sunk: #eef0eb;
   --ink: #171b18;
-  --muted: #676e67;
-  --faint: #8d948c;
+  /*
+   * Measured against --paper, the lightest thing text sits on. The pair used
+   * to be #676e67 and #8d948c, which read 4.33:1 and 2.57:1 — under the 4.5:1
+   * AA minimum, on the secondary text of every page. An accessibility sweep
+   * found it; nobody looking at it would have. The hierarchy is carried by
+   * size and weight, which it already was.
+   */
+  --muted: #4e534e;
+  --faint: #646964;
   --rule: #cfd4ca;
   --rule-strong: #b3bab0;
   --accent: #00806a;
@@ -18,6 +25,8 @@
   --pass: #1d6f52;
   --fail: #a33a26;
   --oneoff: #8a6a2f;
+  /* The same warning hue, dark enough to be read as text rather than drawn as a mark. */
+  --warn-text: #81632c;
   --track: #dfe3db;
 }
 
@@ -38,7 +47,7 @@
     --sunk: #151917;
     --ink: #e4eae2;
     --muted: #949c93;
-    --faint: #737b73;
+    --faint: #808880;
     --rule: #2a312c;
     --rule-strong: #3a433c;
     --accent: #22a37c;
@@ -46,6 +55,7 @@
     --pass: #4fbf94;
     --fail: #e08a72;
     --oneoff: #c9a45c;
+    --warn-text: #c9a45c;
     --track: #262d28;
   }
 }
@@ -56,7 +66,7 @@
   --sunk: #151917;
   --ink: #e4eae2;
   --muted: #949c93;
-  --faint: #737b73;
+  --faint: #808880;
   --rule: #2a312c;
   --rule-strong: #3a433c;
   --accent: #22a37c;
@@ -64,6 +74,7 @@
   --pass: #4fbf94;
   --fail: #e08a72;
   --oneoff: #c9a45c;
+  --warn-text: #c9a45c;
   --track: #262d28;
 }
 
@@ -90,6 +101,7 @@
   --color-pass: var(--pass);
   --color-fail: var(--fail);
   --color-oneoff: var(--oneoff);
+  --color-warn-text: var(--warn-text);
   --color-track: var(--track);
   --font-display: var(--font-display), system-ui, sans-serif;
   --font-mono: var(--font-mono), ui-monospace, monospace;

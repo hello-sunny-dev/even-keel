@@ -56,3 +56,9 @@ next-env.d.ts
 # production build uses its own directory, and one of these is 39MB of
 # somebody's real figures.
 .pglite*/
+
+# Playwright: traces and screenshots of failures, and the cookies the suite
+# signs itself in with. All rebuilt on every run.
+/test-results/
+/playwright-report/
+/e2e/.auth/

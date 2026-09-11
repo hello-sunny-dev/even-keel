@@ -53,14 +53,17 @@ export default async function Ledger({ searchParams }: { searchParams: Promise<{
               {rows.map((r) => {
                 const category = lookUp(categories, r.categoryId);
                 return (
-                  <tr
-                    key={r.id}
-                    className="border-rule border-b"
-                    style={{ opacity: r.isSplitParent ? 0.45 : 1 }}
-                  >
+                  // Struck through, not faded. Opacity dimmed a superseded row
+                  // to 1.8:1 against the page — far under the readable
+                  // minimum — and a row nobody can read is not de-emphasised,
+                  // it is hidden. The rule through the figure says the same
+                  // thing and the words beside it say it out loud.
+                  <tr key={r.id} className="border-rule border-b">
                     <td className="tabular text-muted py-2 pr-3 whitespace-nowrap">{r.date}</td>
                     <td className="py-2 pr-3">
-                      {r.description}
+                      <span className={r.isSplitParent ? "text-muted line-through" : undefined}>
+                        {r.description}
+                      </span>
                       {r.isSplitParent && (
                         <span className="text-faint ml-2 text-xs">split — parts count instead</span>
                       )}
@@ -73,7 +76,9 @@ export default async function Ledger({ searchParams }: { searchParams: Promise<{
                       )}
                     </td>
                     <td className="py-2 text-right">
-                      <Money amount={r.amount} cents tone />
+                      <span className={r.isSplitParent ? "text-muted line-through" : undefined}>
+                        <Money amount={r.amount} cents tone={!r.isSplitParent} />
+                      </span>
                     </td>
                   </tr>
                 );

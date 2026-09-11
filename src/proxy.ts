@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { SESSION_COOKIE, readSessionToken } from "@/lib/auth";
+import { isSameOrigin } from "@/lib/origin";
 
 // Everything before sign-in. `/start` bootstraps the very first account and
 // closes itself once one exists; `/join` accepts an invite.
@@ -46,20 +47,6 @@ function policy(nonce: string, isDev: boolean): string {
   ].join("; ");
 }
 
-/**
- * A state-changing request has to come from this app.
- *
- * The session cookie is SameSite=Lax, which already stops a cross-site form
- * post from carrying it. This is the second lock: it costs one comparison and
- * does not depend on every browser agreeing about what Lax means.
- */
-function sameOrigin(request: NextRequest): boolean {
-  if (!["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) return true;
-  const origin = request.headers.get("origin");
-  if (!origin) return true; // Not sent by every client on same-origin requests.
-  return origin === request.nextUrl.origin;
-}
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const nonce = btoa(crypto.randomUUID());
@@ -75,7 +62,7 @@ export async function proxy(request: NextRequest) {
   };
   const forward = () => send(NextResponse.next({ request: { headers } }));
 
-  if (!sameOrigin(request)) {
+  if (!isSameOrigin(request)) {
     return send(NextResponse.json({ error: "Cross-site request refused." }, { status: 403 }));
   }
 

@@ -464,3 +464,49 @@ way past and change a month's totals for a reason nobody could see on screen. A
 merged-away category is archived rather than deleted, so the rows that still
 name it keep their name. And an id is derived from the name once and never
 again — renaming "Dog" to "Bilbo" must not orphan what is filed under it.
+
+---
+
+### 29. The end-to-end suite runs a production build, and found three things nothing else could
+
+**Why.** Every check up to here ran in the same process as the code it was
+checking. The three things that broke in production broke _because_ it was
+production — bundled, behind a real HTTP server, in a browser.
+
+**What it found, none of it visible in `next dev`:**
+
+1. **PDF import was completely broken in a built server.** `pdf.ts` imported
+   pdfjs by a computed absolute file URL, to survive `tsx` handing the module to
+   Node as a `data:` URL. A bundler reads `import()` calls to decide what to
+   include, cannot read a computed one, and leaves a stub that throws "Cannot
+   find module as expression is too dynamic" — which reached the user as _"That
+   file could not be read as a PDF"_, on every statement. The fix is the literal
+   specifier first (`serverExternalPackages` leaves it as a plain runtime
+   require) with the computed one behind it for the `tsx` case.
+
+2. **Every state-changing request was refused as cross-site on any host that is
+   not literally `localhost`.** The origin check compared against
+   `request.nextUrl.origin`, which Next normalises: under `next start` it reads
+   `http://localhost:<port>` whatever host was dialled. A browser at
+   `http://127.0.0.1:3210` could not sign up. The check now compares against the
+   `Host`/`X-Forwarded-Host` header, which is what the browser used to build the
+   `Origin` it sent.
+
+3. **The secondary text colour failed WCAG AA on every page.** `--muted` on
+   `--paper` measured 4.33:1 and `--faint` 2.57:1, against a 4.5:1 minimum.
+   Nobody looking at it would have found that; an axe assertion did, on the
+   first run. Both are darker now, and the warning colour used as text got its
+   own darker token so the chart mark could stay the colour the palette
+   validator passed.
+
+**How it is arranged.** One worker against one PGlite database, in file order,
+because every spec drives the same household — parallel runs would have one
+test tagging what another asserts is untagged. The password spec is its own
+project depending on the others, since changing the password ends the session
+they are all signed in with: anything scheduled after it would quietly run
+against the login page and pass.
+
+**No skipped tests.** The review specs create their own untagged rows instead of
+borrowing whatever the import happened to leave behind, and the mobile specs
+assert they are not on the login page before measuring the width — a page that
+fits the screen because you are signed out is a green test that checks nothing.

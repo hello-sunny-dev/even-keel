@@ -54,7 +54,10 @@ export function Nav() {
   const overflowActive = OVERFLOW.some((item) => isActive(pathname, item.href));
 
   return (
-    <nav className="border-rule bg-paper/95 fixed inset-x-0 bottom-0 z-20 border-t backdrop-blur sm:relative sm:border-t-0 sm:border-b sm:bg-transparent sm:backdrop-blur-none">
+    <nav
+      aria-label="Main"
+      className="border-rule bg-paper/95 fixed inset-x-0 bottom-0 z-20 border-t backdrop-blur sm:relative sm:border-t-0 sm:border-b sm:bg-transparent sm:backdrop-blur-none"
+    >
       <AnimatePresence>
         {open && (
           <>
@@ -68,6 +71,7 @@ export function Nav() {
               className="bg-ink/20 fixed inset-0 -z-10"
             />
             <motion.ul
+              aria-label="More destinations"
               initial={{ y: 12, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 12, opacity: 0 }}
