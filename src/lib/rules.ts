@@ -26,6 +26,11 @@ type Seed = [pattern: string, categoryId: string, priority?: number];
  * Seed rules, built from the merchant text on real statements. They are a
  * starting point, not the truth — every one of them can be overridden by a
  * user rule, and a correction made once is remembered as a merchant rule.
+ *
+ * Anything uncertain sits in `seedBroad`, which is still a match but the
+ * lowest-confidence one. Two rules of equal priority pointing at different
+ * categories are treated as ambiguous and sent to review, so a rule added
+ * here has to be checked against the tier it lands in, not just read.
  */
 const SEEDS: Seed[] = [
   ["\\bmortgage\\b|\\bhome\\s+loan\\b|\\bloan\\s+repayment\\b", "mortgage-repayment"],
@@ -33,7 +38,7 @@ const SEEDS: Seed[] = [
   ["\\brac\\b.*\\b(home|contents|building)\\b", "insurance-home-contents", PRIORITY.seedSpecific],
   ["\\brac\\b.*\\b(motor|car|vehicle)\\b", "insurance-car", PRIORITY.seedSpecific],
   ["\\brac\\b.*\\b(roadside|breakdown)\\b", "insurance-roadside", PRIORITY.seedSpecific],
-  ["\\bmedibank\\b|\\bbupa\\b|\\bhbf\\b", "insurance-health"],
+  ["\\bmedibank\\b|\\bbupa\\b|\\bhbf\\b|\\bnib\\b|\\bahm\\b|\\bhcf\\b", "insurance-health"],
 
   ["\\bsynergy\\b|\\belectricity\\b|\\bagl\\b|\\benergy\\s*australia\\b", "utilities-electricity"],
   ["\\borigin\\s*energy\\b|\\balinta\\b|\\bkleenheat\\b|\\bgas\\b", "utilities-gas"],
@@ -68,69 +73,113 @@ const SEEDS: Seed[] = [
   ["\\bapple\\.com/bill\\b|\\bapple\\s*(com)?\\s*bill\\b|\\bitunes\\b|\\bicloud\\b", "sub-apple"],
 
   [
-    "\\bwoolworths\\b|\\bcoles\\b|\\baldi\\b|\\biga\\b|\\bfoodland\\b|\\bcostco\\b",
+    "\\bwoolworths\\b|\\bcoles\\b|\\baldi\\b|\\biga\\b|\\bfoodland\\b|\\bcostco\\b|\\bsupermarket\\b|\\bezymart\\b|\\bspudshed\\b|\\bdrakes\\b|\\bfarmer\\s*jacks?\\b|\\bharris\\s*farm\\b|\\bbutcher\\w*\\b|\\bcutting\\s*edge\\s*butc\\w*\\b|\\bgreengrocer\\b|\\bfruit\\s*(and|&)\\s*veg\\b",
     "food-groceries",
   ],
   // Registered/holding-company names that look nothing like the shopfront.
   // This is the category most in need of user correction, so it stays broad.
   [
-    "\\bmetcash\\b|\\bwoolworths\\s*group\\b|\\bendeavour\\s*group\\b",
+    "\\bmetcash\\b|\\bwoolworths\\s*group\\b|\\bendeavour\\s*group\\b|\\bmkt\\s*masters\\b|\\bconvenience\\s*sto\\w*\\b|\\bvegg?ie\\b",
     "food-groceries",
     PRIORITY.seedBroad,
   ],
   [
-    "\\bcafe\\b|\\bcoffee\\b|\\brestaurant\\b|\\buber\\s*eats\\b|\\bdoordash\\b|\\bmenulog\\b|\\bdeliveroo\\b|\\bbakery\\b|\\bsushi\\b|\\bpizza\\b|\\bthai\\b|\\bkitchen\\b",
+    "\\bcafe\\b|\\bcoffee\\b|\\brestaurant\\w*\\b|\\buber\\s*\\*?\\s*eats\\b|\\bdoordash\\b|\\bmenulog\\b|\\bdeliveroo\\b|\\bbakery\\b|\\bsushi\\b|\\bpizza\\b|\\bthai\\b|\\bkitchen\\b|\\blunch\\s*bar\\b|\\bstarbucks\\b|\\bmcdonald\\w*\\b|\\bsubway\\b|\\bhjs\\b|\\bhungry\\s*jacks?\\b|\\bkfc\\b|\\boporto\\b|\\bjesters\\b|\\bnandos?\\b|\\bguzman\\b|\\bdominos?\\b|\\bred\\s*rooster\\b|\\bchicken\\s*treat\\b|\\bburgers?\\b|\\bgrill\\b|\\bbanh\\s*mi\\b|\\bsanchurro\\b|\\bchatime\\b|\\bgelare\\b|\\bjamaica\\s*blue\\b|\\bmuzz\\s*buzz\\b|\\bdome\\b|\\bfrench\\s*riviera\\b|\\bnoodle\\w*\\b|\\bramen\\b|\\bdumpling\\w*\\b|\\bpatisserie\\b|\\bespresso\\b|\\broasters?\\b|\\bjuice\\s*bar\\b|\\bfood\\s*(court|hall)\\b|\\btavern\\b|\\bcanteen\\b",
     "food-dining",
+  ],
+  // A vending machine is a $3 snack rather than a meal, but it is still
+  // discretionary food — and it is the single most frequent line on these
+  // statements, so leaving it unmatched means forty untagged rows a quarter.
+  ["vending\\b|\\bsnack\\s*machine\\b", "food-dining", PRIORITY.seedBroad],
+  // Half the takeaway on these statements is named by its cuisine and
+  // nothing else — "GOLDEN HOUSE CHINESE TA", "SQ *MALAYSIAN HAWKER".
+  [
+    "\\b(chinese|malaysian|hawker|indian|korean|vietnamese|japanese|mexican|italian|greek|lebanese|curry|tikka)\\b",
+    "food-dining",
+    PRIORITY.seedBroad,
   ],
 
   [
-    "\\bbp\\b|\\bcaltex\\b|\\bampol\\b|\\bshell\\b|\\b7-?eleven\\b|\\bunited\\s*petroleum\\b|\\bpuma\\s*energy\\b|\\bfuel\\b|\\bparking\\b|\\bwilson\\s*park\\b|\\bcar\\s*wash\\b|\\btransperth\\b",
+    "\\bbp\\b|\\bcaltex\\b|\\bampol\\b|\\bshell\\b|\\b7\\s*-?\\s*eleven\\b|\\b7\\s*/\\s*11\\b|\\bunited\\s*petroleum\\b|\\bpuma\\s*energy\\b|\\bfuel\\b|\\bparking\\b|\\bwilson\\s*park\\b|\\beasypark\\b|\\bcar\\s*wash\\b|\\btransperth\\b|\\bsmartrider\\b|\\btyres?\\b|\\bmechanic\\b|\\bautobarn\\b|\\bsupercheap\\s*auto\\b|\\brepco\\b|\\bauto\\s*classic\\b",
     "transport-fuel-parking-car",
+  ],
+  // Petrol stations that trade under a supermarket's name match the grocery
+  // rule just as well. Without the higher priority they are a tie between two
+  // categories, which means every tank of fuel lands in the review queue.
+  [
+    "\\breddy\\s*express\\b|\\bcoles\\s*express\\b|\\bwoolworths\\s*(petrol|fuel)\\b",
+    "transport-fuel-parking-car",
+    PRIORITY.seedSpecific,
+  ],
+  // A dealership charge is usually a service, occasionally a car. Broad,
+  // because the difference is thousands of dollars and one of them is a one-off.
+  [
+    "\\bhonda\\b|\\btoyota\\b|\\bmazda\\b|\\bsubaru\\b|\\bservice\\s*cent(re|er)\\b",
+    "transport-fuel-parking-car",
+    PRIORITY.seedBroad,
   ],
   ["\\bcar\\s*(loan|finance)\\b|\\bnovated\\b|\\bplenti\\b|\\bmoney3\\b", "transport-car-finance"],
 
   [
-    "\\bpharmacy\\b|\\bchemist\\b|\\bmedical\\s*cent(re|er)\\b|\\bdental\\b|\\bdentist\\b|\\bphysio\\b|\\bpathology\\b|\\bgp\\s*clinic\\b|\\boptometrist\\b",
+    "\\bpharmacy\\b|\\bchemist\\b|\\bcwh\\b|\\bmedical\\b|\\bdental\\b|\\bdentist\\b|\\bphysio\\w*\\b|\\bpatholog\\w*\\b|\\bclinical\\s*lab\\w*\\b|\\bradiolog\\w*\\b|\\bimaging\\b|\\boptometrist\\b|\\bst\\.?\\s*john\\b|\\burgent\\s*care\\b|\\bmcare\\b|\\bmedicare\\b",
     "medical-out-of-pocket",
   ],
-
+  // A vet is a clinic and a surgery too, so this sits a tier below the pet
+  // rules instead of tying with them and sending every vet visit to review.
   [
-    "\\bgym\\b|\\bfitness\\b|\\banytime\\s*fitness\\b|\\bf45\\b|\\bpilates\\b|\\byoga\\b",
+    "\\bclinic\\w*\\b|\\bsurgery\\b|\\bhealth\\s*cent(re|er)\\b",
+    "medical-out-of-pocket",
+    PRIORITY.seedBroad,
+  ],
+
+  // `\bfitn\w*\b` rather than `\bfitness\b`: the statement truncates the
+  // merchant, and "Northside Fitn" is not a different gym.
+  [
+    "\\bgym\\b|\\bfitn\\w*\\b|\\bf45\\b|\\bpilates\\b|\\byoga\\b|\\bcrossfit\\b|\\bgoodlife\\b",
     "personal-fitness",
   ],
   [
-    "\\bhairdress\\w*\\b|\\bbarber\\b|\\bnails?\\b|\\bbeauty\\b|\\bmecca\\b|\\bpriceline\\b|\\bsephora\\b",
+    "\\bhairdress\\w*\\b|\\bbarber\\w*\\b|\\bdry\\s*cle\\w*\\b|\\bnails?\\b|\\bbeauty\\b|\\bmecca\\b|\\bpriceline\\b|\\bsephora\\b",
     "personal-care",
   ],
   [
-    "\\buniqlo\\b|\\bkmart\\b|\\btarget\\b|\\bcotton\\s*on\\b|\\bh\\s*&\\s*m\\b|\\bzara\\b|\\bthe\\s*iconic\\b|\\bmyer\\b|\\bdavid\\s*jones\\b",
+    "\\buniqlo\\b|\\bkmart\\b|\\btarget\\b|\\bbig\\s*w\\b|\\bcotton\\s*on\\b|\\bh\\s*&\\s*m\\b|\\bzara\\b|\\bthe\\s*iconic\\b|\\bmyer\\b|\\bdavid\\s*jones\\b|\\bshein\\b|\\bbonds\\b|\\bjeanswest\\b",
     "personal-clothing",
   ],
+  ["\\brebel\\b|\\bsportsgirl\\b|\\bdecathlon\\b", "personal-clothing", PRIORITY.seedBroad],
 
   [
-    "\\bpet\\s*insurance\\b|\\bknose\\b|\\bpetplan\\b|\\btrupanion\\b",
+    "\\bpet\\s*insurance\\b|\\bpetsure\\b|\\bpetcover\\b|\\bknose\\b|\\bpetplan\\b|\\btrupanion\\b",
     "pet-insurance",
     PRIORITY.seedSpecific,
   ],
   [
-    "\\bpetbarn\\b|\\bpet\\s*stock\\b|\\bpetstock\\b|\\bvet\\b|\\bveterinar\\w*\\b|\\bpet\\s*circle\\b",
+    "\\bpetbarn\\b|\\bpet\\s*stock\\b|\\bpetstock\\b|\\bpetco\\b|\\bvet\\b|\\bveterinar\\w*\\b|\\bvetwest\\b|\\banimal\\s*hospital\\b|\\bpet\\s*circle\\b|\\briverside\\s*pets?\\b|\\bpet\\s*(supplies|store|shop|food|grooming)\\b",
     "pet-care",
   ],
 
   ["\\batm\\b|\\bcash\\s*(withdrawal|out)\\b|\\bwithdrawal\\s*fee\\b", "other-cash-withdrawal"],
+  // Streaming, games and general shops that have no category of their own.
+  // "Other / Discretionary" is an honest answer to "we don't know which of
+  // these it is", and a correction here is one tap that sticks forever.
+  [
+    "\\bofficeworks\\b|\\bamazon\\b|\\bjb\\s*hi-?\\s*fi\\b|\\bthe\\s*good\\s*guys\\b|\\bplaystation\\b|\\bsony\\s*interactive\\b|\\bnintendo\\b|\\bsteam\\b|\\bstan\\.com\\b|\\bstan\\s*entertainment\\b|\\bspotify\\b|\\bopenai\\b|\\bchatgpt\\b|\\baudible\\b|\\bkindle\\b|\\blotter\\w*\\b|\\bnewsagen\\w*\\b|\\bnextra\\b|\\bbikes?\\b|\\bcycles\\b|\\bcleaning\\b|\\bcleaner\\b",
+    "other-discretionary",
+    PRIORITY.seedBroad,
+  ],
 
   [
     "\\bsettlement\\b.*\\b(conveyanc\\w*|solicitor|property)\\b|\\bconveyanc\\w*\\b",
     "oneoff-house-settlement",
     PRIORITY.seedSpecific,
   ],
-  ["\\bremovalist\\w*\\b|\\bmoving\\s*co\\b|\\bman\\s*(with|and)\\s*a?\\s*van\\b", "oneoff-moving"],
+  ["\\bremoval\\w*\\b|\\bmoving\\s*co\\b|\\bman\\s*(with|and)\\s*a?\\s*van\\b", "oneoff-moving"],
   [
     "\\bbunnings\\b|\\bmitre\\s*10\\b|\\bhardware\\b|\\breece\\b|\\btotal\\s*tools\\b",
     "oneoff-home-hardware",
   ],
   [
-    "\\bikea\\b|\\bfantastic\\s*furniture\\b|\\bfreedom\\b|\\bnick\\s*scali\\b|\\badairs\\b|\\bhome\\s*co\\b",
+    "\\bikea\\b|\\bfantastic\\s*furniture\\b|\\bfreedom\\b|\\bnick\\s*scali\\b|\\badairs\\b|\\bbed\\s*bath\\b|\\bspotlight\\b|\\btemple\\s*(and|&)\\s*webster\\b|\\bpillow\\s*talk\\b|\\bearly\\s*settler\\b|\\bamart\\b|\\bharvey\\s*norman\\b",
     "oneoff-furniture",
   ],
   [
@@ -145,7 +194,7 @@ const SEEDS: Seed[] = [
     PRIORITY.seedSpecific,
   ],
   [
-    "\\bcity\\s*of\\s+\\w+\\b|\\bshire\\s*of\\s+\\w+\\b|\\bcouncil\\s*rates\\b|\\bland\\s*tax\\b|\\bdept\\s*of\\s*transport\\b",
+    "\\bcity\\s*of\\s+\\w+\\b|\\bshire\\s*of\\s+\\w+\\b|\\bcouncil\\s*rates\\b|\\bland\\s*tax\\b|\\bdept\\s*of\\s*transport\\b|\\btransport\\s*wa\\b|\\bvehicle\\s*licen[cs]e\\b|\\bdrivers?\\s*licen[cs]e\\b",
     "oneoff-government-rates",
   ],
   [
@@ -169,6 +218,14 @@ const SEEDS: Seed[] = [
     "income-oneoff-other",
     PRIORITY.seedSpecific,
   ],
+  // A government fuel or energy rebate is money coming in. At the ordinary
+  // tier the word "fuel" alone would file it as a petrol station.
+  [
+    "\\bfuel\\s*(support|rebate)\\b|\\benergy\\s*rebate\\b|\\bcost\\s*of\\s*living\\s*(rebate|payment)\\b",
+    "income-oneoff-other",
+    PRIORITY.seedSpecific,
+  ],
+  ["\\bcashback\\b|\\bcash\\s*back\\b", "income-oneoff-other", PRIORITY.seedBroad],
   [
     "\\bhouse\\s*(purchase|deposit)\\s*funds?\\b|\\bsettlement\\s*proceeds\\b",
     "income-house-purchase-funds",

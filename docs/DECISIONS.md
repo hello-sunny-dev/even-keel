@@ -354,3 +354,35 @@ is a queue that will not empty rather than anything that looks like a bug.
 **Consequence.** The same edit fixes both. Six digits is the threshold, not four,
 so `COLES 0292` and `BUNNINGS 2174` keep their store numbers: those identify a
 shop, not a person, and they are stable month to month.
+
+---
+
+### 25. Seed rules are measured against the real statements, not read
+
+**Why.** The seed rules were written from a taxonomy and tested against strings
+invented to match them, so the suite was green while the rules classified 45.6%
+of the household's own 933 transactions. The tests could not have found that: a
+rule and its test were written in the same breath from the same guess.
+
+Replaying every parsed description through `categorize` found the misses, and
+almost all of them were one character wide. `\brestaurant\b` does not match
+`COLLINS RESTAURANTS`. `\bbarber\b` does not match `ICONIC BARBERZ`.
+`\bfitness\b` does not match `Northside Fitn`, which is how the statement
+truncates it. `\b7-?eleven\b` does not match `7 ELEVEN 3009`. `\buber\s*eats\b`
+does not match `UBER *EATS`. None of these look wrong when read.
+
+One was worse than a miss: `\bhome\s*co\b` was seeded as a furniture retailer,
+but on these statements "Northside Home Co" is the name of the shopping centre
+an address ends with. `CWH NORTHSIDE HOME CO` matched both the chemist rule and
+the furniture rule at the same priority, which is a tie, which is the review
+queue — the chemist was never going to win an argument with a car park.
+
+**Consequence.** 45.6% → 78.8% of real rows matched, and the distinct merchants
+in the first review queue drop from 232 to 117. The tests now assert against
+merchant text copied from the statements, truncation included.
+
+**What is deliberately still unmatched.** `RACI` is a RAC direct debit and RAC
+sells car, home and roadside cover; the line names none of them. `ATO ATO` is a
+tax bill or a tax refund depending on a sign the description does not carry.
+Guessing either puts a wrong number in a real total, and a wrong category nobody
+is asked about is worse than an untagged one.

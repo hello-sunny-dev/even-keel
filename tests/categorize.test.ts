@@ -97,3 +97,146 @@ describe("remembering a correction", () => {
     expect(result.status === "needs_review" && result.reason).toBe("ambiguous");
   });
 });
+
+/**
+ * Every string below is merchant text that actually appears on the household's
+ * own statements — spelling, truncation and all. Synthetic examples kept
+ * passing while the real queue filled up with forty untagged vending machine
+ * rows, so these are the cases that decide whether the rules are any use.
+ */
+describe("the merchants these statements actually contain", () => {
+  it("tags the food that keeps recurring", () => {
+    const table: [string, string][] = [
+      ["SMART VENDING PTY LTD", "food-dining"],
+      ["LUNCH BAR 55", "food-dining"],
+      ["FAMILY LUNCH BAR", "food-dining"],
+      ["STARBUCKS", "food-dining"],
+      ["MCDONALDS", "food-dining"],
+      ["SUBWAY", "food-dining"],
+      ["HJs Northside", "food-dining"],
+      ["KFC", "food-dining"],
+      ["OPORTO", "food-dining"],
+      ["JESTERS", "food-dining"],
+      ["French riviera", "food-dining"],
+      ["LS Mission Burgers", "food-dining"],
+      ["Mister Banh Mi", "food-dining"],
+      ["Sanchurro", "food-dining"],
+      ["Chatime", "food-dining"],
+      ["Gelare", "food-dining"],
+      ["Jamaica Blue", "food-dining"],
+      ["Muzz Buzz", "food-dining"],
+      ["SmartMart Supermarket", "food-groceries"],
+      ["Ezymart", "food-groceries"],
+      ["MKT Masters", "food-groceries"],
+      ["SMP*Cutting Edge Butc", "food-groceries"],
+      ["VEGIE BANDITS", "food-groceries"],
+    ];
+
+    for (const [description, expected] of table) {
+      expect(categoryOf(description), description).toBe(expected);
+    }
+  });
+
+  it("tags getting around", () => {
+    const table: [string, string][] = [
+      ["WILSON PARKING", "transport-fuel-parking-car"],
+      ["SECURE PARKING", "transport-fuel-parking-car"],
+      ["EasyPark", "transport-fuel-parking-car"],
+      ["PTA SMARTRIDER", "transport-fuel-parking-car"],
+      ["Reddy Express", "transport-fuel-parking-car"],
+      ["Auto Classic W.A.", "transport-fuel-parking-car"],
+      ["Honda North", "transport-fuel-parking-car"],
+      ["TRANSPORT WA", "oneoff-government-rates"],
+      ["Vehicle licence", "oneoff-government-rates"],
+      ["CITY OF SAMPLE", "oneoff-government-rates"],
+    ];
+
+    for (const [description, expected] of table) {
+      expect(categoryOf(description), description).toBe(expected);
+    }
+  });
+
+  it("tags looking after people and animals", () => {
+    const table: [string, string][] = [
+      ["QT CLINICS", "medical-out-of-pocket"],
+      ["CLINICARE PHARMACY", "medical-out-of-pocket"],
+      ["ST JOHN GP", "medical-out-of-pocket"],
+      ["Broadway Medical", "medical-out-of-pocket"],
+      ["CLINICAL LABORATORIES", "medical-out-of-pocket"],
+      ["CWH NORTHSIDE", "medical-out-of-pocket"],
+      // A Medicare rebate lands in the category it reimburses, where a
+      // positive amount nets against that month's spend rather than reading
+      // as income.
+      ["MCARE BENEFITS", "medical-out-of-pocket"],
+      ["PETSURE", "pet-insurance"],
+      ["PETCO NEWCO", "pet-care"],
+      ["SQ *RIVERSIDE PETS", "pet-care"],
+      ["MAD PAWS", "oneoff-pet-sitting"],
+      ["Northside Fitn", "personal-fitness"],
+    ];
+
+    for (const [description, expected] of table) {
+      expect(categoryOf(description), description).toBe(expected);
+    }
+  });
+
+  it("tags the shops and the screens", () => {
+    const table: [string, string][] = [
+      ["BIG W", "personal-clothing"],
+      ["REBEL", "personal-clothing"],
+      ["SPOTLIGHT", "oneoff-furniture"],
+      ["TEMPLE & WEBSTER", "oneoff-furniture"],
+      ["OFFICEWORKS", "other-discretionary"],
+      ["AMAZON MARKETPLACE", "other-discretionary"],
+      ["JB HI FI", "other-discretionary"],
+      ["STAN.COM.AU", "other-discretionary"],
+      ["PLAYSTATION NETWORK", "other-discretionary"],
+      ["Nintendo", "other-discretionary"],
+      ["STEAM", "other-discretionary"],
+      ["OPENAI *CHATGPT", "other-discretionary"],
+    ];
+
+    for (const [description, expected] of table) {
+      expect(categoryOf(description), description).toBe(expected);
+    }
+  });
+
+  it("tags money coming in", () => {
+    const table: [string, string][] = [
+      ["CBA Acme Salary", "income-salary"],
+      ["FLEETWARE PAYROLL", "income-salary"],
+      ["Oe Cashback", "income-oneoff-other"],
+    ];
+
+    for (const [description, expected] of table) {
+      expect(categoryOf(description), description).toBe(expected);
+    }
+  });
+
+  it("reads a fuel rebate as income and not as a petrol station", () => {
+    // Both rules match the word "fuel"; only the priority decides, so this is
+    // the assertion that stops a rebate from being filed as a tank of petrol.
+    expect(categoryOf("Fuel Support Pay")).toBe("income-oneoff-other");
+    expect(categoryOf("BP CONNECT FUEL")).toBe("transport-fuel-parking-car");
+  });
+
+  it("keeps a supermarket-branded petrol station out of the groceries", () => {
+    expect(categoryOf("COLES EXPRESS")).toBe("transport-fuel-parking-car");
+    expect(categoryOf("COLES NORTHSIDE")).toBe("food-groceries");
+  });
+
+  it("keeps a vet out of the medical category it now overlaps", () => {
+    // Broadening "medical centre" to "clinic" put vets in range of both rules.
+    expect(categoryOf("VET CLINIC NORTHSIDE")).toBe("pet-care");
+    expect(categoryOf("VETERINARY SURGERY")).toBe("pet-care");
+  });
+
+  it("still asks about the ones that genuinely cannot be read", () => {
+    // RAC sells car, home and roadside cover and the statement line names
+    // none of them; a guess here would be a wrong number in a real total.
+    expect(categoryOf("RACI")).toBe("no_match");
+    // An ATO line is a tax bill or a tax refund depending on its sign, which
+    // the description does not carry.
+    expect(categoryOf("ATO ATO")).toBe("no_match");
+  });
+});
