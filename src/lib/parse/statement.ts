@@ -238,6 +238,64 @@ function near(a: number, b: number): boolean {
 }
 
 /**
+ * The labels a statement summary uses, in the order they are written.
+ *
+ * the bank's everyday statement lays the summary out in four columns, all the
+ * labels on one line and all the figures on the next:
+ *
+ *     Opening balance  Total money in  Total money out  Closing balance
+ *     $0.00            $88,412.37     $-80,927.61     $7,484.76
+ *
+ * One label, one figure, matched by position. Reading only the first or last
+ * amount takes the opening balance for the closing one, or the total money out.
+ */
+const SUMMARY_LABELS =
+  /opening balance|closing balance|brought forward|carried forward|total money in|total money out|total credits|total debits|total deposits|total withdrawals/gi;
+
+/** Every money-shaped token on a line, in order, sign included. */
+function moneyTokens(line: string): number[] {
+  const out: number[] = [];
+  const re = /(-)?\$?\s*(-)?((?:\d{1,3}(?:,\d{3})+|\d+)\.\d{2})/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(line)) !== null) {
+    const value = Number(m[3].replace(/,/g, ""));
+    const negative = m[1] === "-" || m[2] === "-";
+    out.push(negative && value !== 0 ? -value : value);
+  }
+  return out;
+}
+
+/**
+ * Read a multi-column summary block, if there is one.
+ *
+ * Only fires when a line carries two or more summary labels and a neighbouring
+ * line carries exactly as many figures — which is what makes the pairing by
+ * position safe. The figures sit below the labels here and above them on the
+ * loan statement, so both neighbours are tried.
+ */
+function readSummaryBlock(lines: string[]): { opening: number | null; closing: number | null } {
+  for (let i = 0; i < lines.length; i++) {
+    const labels = lines[i].match(SUMMARY_LABELS);
+    if (!labels || labels.length < 2) continue;
+
+    for (const neighbour of [lines[i + 1], lines[i - 1]]) {
+      if (!neighbour) continue;
+      const amounts = moneyTokens(neighbour);
+      if (amounts.length !== labels.length) continue;
+
+      let opening: number | null = null;
+      let closing: number | null = null;
+      labels.forEach((label, column) => {
+        if (/opening|brought/i.test(label)) opening = amounts[column];
+        else if (/closing|carried/i.test(label)) closing = amounts[column];
+      });
+      if (opening !== null || closing !== null) return { opening, closing };
+    }
+  }
+  return { opening: null, closing: null };
+}
+
+/**
  * Turn reconstructed statement lines into transactions.
  *
  * Deliberately tolerant about layout: a line qualifies as a transaction when
@@ -275,8 +333,11 @@ export function parseStatementText(
   let year = statementYear ?? 0;
   let prevMonth: number | null = null;
   let prevBalance: number | null = null;
-  let openingBalance: number | null = null;
-  let closingBalance: number | null = null;
+  // A multi-column summary is unambiguous, so it is read first and the
+  // line-by-line rules below only fill in what it did not find.
+  const summary = readSummaryBlock(lines);
+  let openingBalance: number | null = summary.opening;
+  let closingBalance: number | null = summary.closing;
   let pendingBalance: "opening" | "closing" | null = null;
   let previousLine: string | null = null;
 

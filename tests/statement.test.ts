@@ -427,3 +427,48 @@ describe("a balance column that counts the debt upwards", () => {
     expect(warnings.join(" ")).not.toMatch(/wrong way round/i);
   });
 });
+
+describe("a four-column summary block", () => {
+  // An everyday statement, in the layout the bank prints. All the labels on one line
+  // and all the figures on the next, so they only pair up by position.
+  const SUMMARY = [
+    "Balance",
+    "Opening balance Total money in Total money out Closing balance",
+    "$0.00 $88,412.37 $-80,927.61 $7,484.76",
+    "Transactions",
+    "14/01/2026 Osko Deposit - Receipt 10.00 10.00",
+  ].join("\n");
+
+  it("pairs each label with the figure beneath it", () => {
+    const result = parse(SUMMARY, { statementYear: 2026 });
+
+    expect(result.openingBalance).toBe(0);
+    expect(result.closingBalance).toBe(7484.76);
+  });
+
+  it("does not mistake total money out for the closing balance", () => {
+    // Taking the last amount would give 7,484.76 by luck here; taking the
+    // third would give −80,927.61. Position is the only thing that decides it.
+    expect(parse(SUMMARY, { statementYear: 2026 }).closingBalance).not.toBe(-80927.61);
+  });
+
+  it("refuses to pair when the counts do not line up", () => {
+    // Four labels against three figures is a layout this has not seen, and
+    // guessing at it would be worse than reporting no balances.
+    const mismatched = [
+      "Opening balance Total money in Total money out Closing balance",
+      "$0.00 $88,412.37 $7,484.76",
+    ].join("\n");
+
+    expect(parse(mismatched, { statementYear: 2026 }).closingBalance).toBeNull();
+  });
+
+  it("still reads the loan statement, whose figures sit above the labels", () => {
+    const loan = [
+      "$392,543.19 DR $1,426.37",
+      "Closing balance Interest paid this financial year",
+    ].join("\n");
+
+    expect(parse(loan, { statementYear: 2026 }).closingBalance).toBe(-392543.19);
+  });
+});
