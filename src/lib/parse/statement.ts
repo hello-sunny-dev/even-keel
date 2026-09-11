@@ -338,6 +338,10 @@ export function parseStatementText(
   const summary = readSummaryBlock(lines);
   let openingBalance: number | null = summary.opening;
   let closingBalance: number | null = summary.closing;
+  // A column summary names its figures outright. The line-by-line rules below
+  // are guesses by comparison — they fill in what the summary did not find and
+  // never overwrite what it did.
+  const fromSummary = { opening: summary.opening !== null, closing: summary.closing !== null };
   let pendingBalance: "opening" | "closing" | null = null;
   let previousLine: string | null = null;
 
@@ -362,9 +366,9 @@ export function parseStatementText(
         const above = wasPrevious === null ? null : takeLeadingAmount(wasPrevious);
         if (above !== null) {
           if (which === "opening") {
-            openingBalance = above;
+            if (!fromSummary.opening) openingBalance = above;
             prevBalance = above;
-          } else {
+          } else if (!fromSummary.closing) {
             closingBalance = above;
           }
         } else {
@@ -375,9 +379,9 @@ export function parseStatementText(
       }
       if (tail && !tail.rest && pendingBalance) {
         if (pendingBalance === "opening") {
-          openingBalance = tail.signed;
+          if (!fromSummary.opening) openingBalance = tail.signed;
           prevBalance = tail.signed;
-        } else {
+        } else if (!fromSummary.closing) {
           closingBalance = tail.signed;
         }
         pendingBalance = null;
@@ -387,9 +391,9 @@ export function parseStatementText(
 
       if (tail && BALANCE_LINE.test(tail.rest)) {
         if (/^opening|brought/i.test(tail.rest)) {
-          openingBalance = tail.signed;
+          if (!fromSummary.opening) openingBalance = tail.signed;
           prevBalance = tail.signed;
-        } else {
+        } else if (!fromSummary.closing) {
           closingBalance = tail.signed;
         }
         continue;
@@ -424,9 +428,9 @@ export function parseStatementText(
 
     if (BALANCE_LINE.test(body)) {
       if (/^opening|brought/i.test(body)) {
-        openingBalance = amountTail.signed;
+        if (!fromSummary.opening) openingBalance = amountTail.signed;
         prevBalance = amountTail.signed;
-      } else {
+      } else if (!fromSummary.closing) {
         closingBalance = amountTail.signed;
       }
       continue;
