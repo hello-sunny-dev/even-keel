@@ -1,16 +1,18 @@
 import { Heading, Note } from "@/components/ui";
 import { currentMonthIn } from "@/lib/dates";
-import { listGoals, listSavingsPlans } from "@/lib/db/queries";
+import { listCategories, listGoals, listSavingsPlans } from "@/lib/db/queries";
 import { requireSession } from "@/lib/session";
+import { CategoryNote, CategorySettings } from "./CategorySettings";
 import { GoalForm, ScenarioLadder } from "./GoalsForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function Goals() {
   const { db, household, settings } = await requireSession();
-  const [goals, scenarios] = await Promise.all([
+  const [goals, scenarios, categories] = await Promise.all([
     listGoals(db, household),
     listSavingsPlans(db, household),
+    listCategories(db, household),
   ]);
 
   const cash = goals.find((g) => g.kind === "cash");
@@ -60,6 +62,19 @@ export default async function Goals() {
             whatever is true.
           </Note>
         )}
+      </section>
+
+      <section className="mt-10">
+        <p className="eyebrow mb-3">Categories</p>
+        <p className="text-muted mb-3 max-w-prose text-sm">
+          Rename one, say how often it really bills, or fold two into one. A category that bills
+          every two months and is averaged as monthly halves itself in every trailing figure, so the
+          rhythm here is not decoration.
+        </p>
+        <CategorySettings categories={categories} />
+        <div className="mt-3">
+          <CategoryNote />
+        </div>
       </section>
     </>
   );

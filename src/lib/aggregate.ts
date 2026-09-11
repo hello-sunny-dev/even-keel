@@ -55,11 +55,11 @@ export function effectiveKind(
   return lookUp(categories, txn.categoryId)?.kind ?? txn.kind;
 }
 
-export function countable(txns: Txn[]): Txn[] {
+export function countable<T extends Txn>(txns: T[]): T[] {
   return txns.filter((t) => !t.isSplitParent);
 }
 
-export function forMonth(txns: Txn[], month: string): Txn[] {
+export function forMonth<T extends Txn>(txns: T[], month: string): T[] {
   return countable(txns).filter((t) => t.month === month);
 }
 
@@ -136,6 +136,21 @@ export function movedOut(txns: Txn[], month: string, categories: Categories): nu
     (t) => effectiveKind(t, categories) === "transfer" && t.amount < 0,
   );
   return negated(sumAmounts(rows.map((t) => t.amount)));
+}
+
+/**
+ * Every one-off cost in a month, biggest first.
+ *
+ * The same filter `monthlySummary` totals, factored out rather than written
+ * twice: the one-off page showing a different set from the dashboard's
+ * one-off figure is exactly the disagreement this replaces. A
+ * month-granularity row belongs here — it is a real figure, it is simply not
+ * a line on a statement — so nothing filters on granularity.
+ */
+export function oneOffRows<T extends Txn>(txns: T[], month: string, categories: Categories): T[] {
+  return forMonth(txns, month)
+    .filter((t) => effectiveKind(t, categories) === "expense" && isOneOff(t, categories))
+    .sort((a, b) => a.amount - b.amount);
 }
 
 export type CategoryRow = {

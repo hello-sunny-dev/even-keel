@@ -157,6 +157,7 @@ export async function setCategorySettings(
     cadence?: Cadence;
     oneOff?: boolean;
     name?: string;
+    archived?: boolean;
   },
 ): Promise<void> {
   const sets: string[] = [];
@@ -172,12 +173,67 @@ export async function setCategorySettings(
     add("cadence_unit = ?, cadence_count = ?", patch.cadence.unit, patch.cadence.count);
   if (patch.oneOff !== undefined) add("one_off = ?", patch.oneOff);
   if (patch.name !== undefined) add("name = ?", patch.name);
+  if (patch.archived !== undefined) add("archived = ?", patch.archived);
   if (sets.length === 0) return;
 
   await db.query(
     `update categories set ${sets.join(", ")} where household_id = $1 and id = $2`,
     params,
   );
+}
+
+/**
+ * A category the household made up, because a taxonomy written in advance is
+ * always somebody else's.
+ *
+ * The id is derived from the name so the database stays readable, but it is
+ * never rewritten afterwards: renaming "Dog" to "Bilbo" must not orphan the
+ * rows that already point at it.
+ */
+export async function createCategory(
+  db: Db,
+  household: string,
+  input: {
+    name: string;
+    group: Category["group"];
+    kind: Category["kind"];
+    oneOff: boolean;
+    cadence: Cadence;
+  },
+): Promise<string> {
+  const base =
+    input.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40) || "category";
+
+  const taken = new Set(
+    (
+      await db.query<{ id: string }>(`select id from categories where household_id = $1`, [
+        household,
+      ])
+    ).map((r) => r.id),
+  );
+
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+
+  await db.query(
+    `insert into categories (id, household_id, name, "group", kind, one_off, cadence_unit, cadence_count)
+     values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      id,
+      household,
+      input.name,
+      input.group,
+      input.kind,
+      input.oneOff,
+      input.cadence.unit,
+      input.cadence.count,
+    ],
+  );
+  return id;
 }
 
 /**

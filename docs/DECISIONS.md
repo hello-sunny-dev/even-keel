@@ -416,3 +416,51 @@ number redacted away could be either, `SWIFT TRANSFER` is usually money leaving
 the country, and `Osko Payment - Receipt Transfer To Competitive Cleaning` is a
 cleaner being paid. All three stay questions, and the review queue grew a
 **Transfer** button so the answer can be given without inventing a category for it.
+
+---
+
+### 27. Recurring spend by group is one hue and a ranked list, not twelve colours
+
+**Why.** The obvious drawing for "where does the money go" is a stacked bar per
+month, one colour per group. There are twelve groups. A categorical palette is
+only readable to about eight, and every hue past that has to be invented — which
+means inventing a colour and then hoping it separates from its neighbours for a
+reader with deuteranopia. It would not: the eight-hue limit is where the
+separation runs out, not where the imagination does.
+
+The question is a magnitude with the identity already written next to it, so a
+ranked list of single-hue bars answers it exactly, in reading order, with the
+label right there. The tail folds into one row that says how many groups it is
+rather than becoming a colour nobody can name.
+
+**Consequence.** Two colours in the whole trends page: teal for income and amber
+for spending, measured at ΔE 11.1 (protanopia, light) and 9.3 (dark) against a
+bar of 8. Both charts still carry a legend and an end-label, so colour is never
+the only channel — the green/red pass-fail pair elsewhere fails that test at
+ΔE 7.3, which is why the month strip is read by geometry instead.
+
+**Also.** Axis labels are HTML positioned over the SVG rather than `<text>`
+inside it. A `font-size: 10` inside a viewBox that scales to fill its container
+renders at about 6px on a phone and 29px on a desktop — the one thing on the
+page that has to stay readable at both.
+
+---
+
+### 28. A category is editable, mergeable and creatable, or the taxonomy is a guess that sticks
+
+**Why.** The category list was written in advance from a spreadsheet. Some of it
+is wrong for this household and all of it will drift: a "Dining / Cafe /
+Takeaway" that should have been split, two categories that turned out to be one
+thing, a rhythm that is really every two months. `setCategorySettings` and
+`mergeCategories` were written and then had no way to be called.
+
+**Consequence.** Rename, one-off, billing rhythm, monthly target, merge into
+another, archive and restore, and create a new one — on the goals page, because
+that is where the numbers these settings move are set.
+
+**The rules the form enforces.** A merge across kinds is refused: folding an
+income category into an expense one would turn money in into money out on the
+way past and change a month's totals for a reason nobody could see on screen. A
+merged-away category is archived rather than deleted, so the rows that still
+name it keep their name. And an id is derived from the name once and never
+again — renaming "Dog" to "Bilbo" must not orphan what is filed under it.
