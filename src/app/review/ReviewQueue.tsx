@@ -61,6 +61,17 @@ function ReviewRow({ row, categories }: { row: Row; categories: StoredCategory[]
     router.refresh();
   }
 
+  // Neither spending nor income, so it takes no category: the answer is that
+  // there is nothing to count here.
+  async function markTransfer() {
+    setBusy(true);
+    setMessage(null);
+    const result = await post({ tag: { id: row.id, categoryId: null, transfer: true } });
+    setBusy(false);
+    if (!result.ok) return setMessage({ text: result.error ?? "Failed.", bad: true });
+    router.refresh();
+  }
+
   return (
     <li className="border-rule bg-sheet rounded-xl border p-4">
       <div className="flex items-baseline justify-between gap-4">
@@ -111,6 +122,15 @@ function ReviewRow({ row, categories }: { row: Row; categories: StoredCategory[]
               className="border-rule-strong rounded-lg border px-3 py-2 text-sm"
             >
               Split
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={markTransfer}
+              title="Money moved between our own accounts — not spending, not income"
+              className="border-rule-strong rounded-lg border px-3 py-2 text-sm"
+            >
+              Transfer
             </button>
           </div>
 

@@ -1,4 +1,5 @@
 import { effectiveKind } from "./aggregate";
+import { isInternalTransfer } from "./transfers";
 import { merchantKey } from "./redact";
 import { categorize } from "./categorize";
 import { lookUp, type Categories } from "./categories";
@@ -63,8 +64,11 @@ function propose(
   stripNames: (text: string) => string,
 ): ProposedTransaction {
   const description = stripNames(t.description) || t.description;
-  const match = categorize(description, categories, rules);
-  const categoryId = match.status === "matched" ? match.categoryId : null;
+  // Asked before the category is, because a transfer has no category and
+  // giving it one would put it back into a total it must stay out of.
+  const transfer = isInternalTransfer(description);
+  const match = transfer ? null : categorize(description, categories, rules);
+  const categoryId = match?.status === "matched" ? match.categoryId : null;
   const category = lookUp(categories, categoryId);
 
   return {
@@ -79,7 +83,7 @@ function propose(
     oneOff: category?.oneOff ?? false,
     // The category decides, so a refund stays an expense. The sign is only
     // the fallback for a row nothing matched.
-    kind: category?.kind ?? (t.amount > 0 ? "income" : "expense"),
+    kind: transfer ? "transfer" : (category?.kind ?? (t.amount > 0 ? "income" : "expense")),
     sourceFile,
     duplicate: false,
     include: true,
@@ -183,7 +187,9 @@ export function toInsertable(
           ? null
           : row.oneOff
         : row.oneOff || null,
-      needsReview: row.categoryId === null,
+      // A transfer has no category and never needs one, so it must not be
+      // counted as an unanswered question in the review queue.
+      needsReview: row.categoryId === null && effectiveKind(row, categories) !== "transfer",
       source,
       sourceFingerprint: row.sourceFingerprint,
     }));

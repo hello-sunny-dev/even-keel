@@ -20,9 +20,15 @@ export async function POST(request: Request) {
   const categories = await categoryMap(db, household);
 
   if (body?.tag) {
-    const { id, categoryId, oneOff, merchantKey, applyToHistory, remember } = body.tag;
+    const { id, categoryId, oneOff, merchantKey, applyToHistory, remember, transfer } = body.tag;
     if (typeof id !== "string") {
       return NextResponse.json({ error: "Which transaction?" }, { status: 400 });
+    }
+    // "It went to our own account" is an answer instead of a category, not as
+    // well as one — a transfer belongs to no category by definition.
+    if (transfer === true) {
+      await categoriseTransaction(db, household, id, { categoryId: null, kind: "transfer" });
+      return NextResponse.json({ ok: true, applied: 0 });
     }
     if (categoryId !== null && !categories.has(categoryId)) {
       return NextResponse.json({ error: "No such category." }, { status: 400 });

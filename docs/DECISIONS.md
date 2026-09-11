@@ -386,3 +386,33 @@ sells car, home and roadside cover; the line names none of them. `ATO ATO` is a
 tax bill or a tax refund depending on a sign the description does not carry.
 Guessing either puts a wrong number in a real total, and a wrong category nobody
 is asked about is worse than an untagged one.
+
+---
+
+### 26. A transfer between our own accounts is marked at import, not asked about
+
+**Why.** 22 of the 933 rows on these statements are the household moving its own
+money: `Internal Transfer - Receipt To Everyday Account`, `To my …`, and on the
+home-loan statement `Repayment - Direct Credit`, which is the other half of a
+debit on the everyday account. Both halves land in the ledger once both
+statements are imported. Left alone, one $1,538.46 transfer becomes $1,538.46 of
+spending that never happened and $1,538.46 of income nobody earned, and _actual
+saved_ — the number the app exists to produce — is wrong twice in the same month.
+
+No category can decide this. The same amount in the same category is real
+spending when it leaves the household, which is why `kind` lives on the
+transaction and the schema has always had `'transfer'` on it. Nothing ever set it.
+
+**Consequence.** `isInternalTransfer` runs before categorisation, sets
+`kind = 'transfer'`, leaves the category null, and — the part that matters for
+the queue — marks the row as not needing review. A transfer is the one untagged
+row that is not an open question.
+
+**Why the list is short.** Marking a real payment as a transfer hides it from
+every total with nothing on screen to say so; leaving a transfer in the queue is
+visible and costs one tap. So only the bank's own wording for a move between a
+customer's own accounts counts. `TRANSFER RECEIPT TRANSFER FROM` with the account
+number redacted away could be either, `SWIFT TRANSFER` is usually money leaving
+the country, and `Osko Payment - Receipt Transfer To Competitive Cleaning` is a
+cleaner being paid. All three stay questions, and the review queue grew a
+**Transfer** button so the answer can be given without inventing a category for it.

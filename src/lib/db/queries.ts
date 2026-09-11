@@ -1,4 +1,4 @@
-import type { Txn } from "../aggregate";
+import type { Txn, TxnKind } from "../aggregate";
 import type { Cadence } from "../cadence";
 import { CATEGORIES, type Category } from "../categories";
 import type { Goal, SavingsScenario } from "../goals";
@@ -381,17 +381,21 @@ export async function categoriseTransaction(
   db: Db,
   household: string,
   id: string,
-  patch: { categoryId: string | null; oneOffOverride?: boolean | null },
+  patch: { categoryId: string | null; oneOffOverride?: boolean | null; kind?: TxnKind },
 ): Promise<void> {
+  // A transfer is the one answer that is complete without a category: it is
+  // not spending and not income, so there is nothing left to ask about it.
+  const kind = patch.kind ?? null;
   await db.query(
     // $3 is cast because it also appears bare in `is null`, where Postgres
     // has nothing else to infer a type from.
     `update transactions
         set category_id = $3::text,
             one_off_override = $4::boolean,
-            needs_review = $3::text is null
+            kind = coalesce($5::text, kind),
+            needs_review = $3::text is null and coalesce($5::text, kind) <> 'transfer'
       where household_id = $1 and id = $2`,
-    [household, id, patch.categoryId, patch.oneOffOverride ?? null],
+    [household, id, patch.categoryId, patch.oneOffOverride ?? null, kind],
   );
 }
 
