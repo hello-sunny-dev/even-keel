@@ -444,6 +444,38 @@ export function parseStatementText(
     warnings.push("No transactions found — the statement layout may not be recognised.");
   }
 
+  /**
+   * A statement whose every sign is inverted, caught by its own balances.
+   *
+   * the bank's loan statement prints the running balance as the size of the debt,
+   * with no minus and no DR on the transaction rows — so a drawdown that takes
+   * the balance from 0 to 393,611.43 looks, to anything reading the delta,
+   * exactly like money arriving. All eighteen rows came out backwards and the
+   * drift was $825,672.54: twice the closing balance, which is the shape an
+   * inverted sum always has.
+   *
+   * Rather than guess which accounts do this, try it: if the statement does
+   * not reconcile as parsed but reconciles exactly when every amount is
+   * negated, then the balance column was a magnitude. The statement's own
+   * opening and closing figures are the proof, so this cannot fire on a
+   * statement that was already right — and it says so in a warning, because a
+   * silent sign flip is not something anybody should have to discover.
+   */
+  if (openingBalance !== null && closingBalance !== null && transactions.length > 0) {
+    const cents = (n: number) => Math.round(n * 100);
+    const moved = transactions.reduce((sum, t) => sum + cents(t.amount), 0);
+    const gap = cents(openingBalance) + moved - cents(closingBalance);
+
+    if (gap !== 0 && cents(openingBalance) - moved - cents(closingBalance) === 0) {
+      for (const t of transactions) t.amount = t.amount === 0 ? 0 : -t.amount;
+      warnings.push(
+        "Every amount was the wrong way round against this statement's own balances — " +
+          "its balance column counts up as the debt grows. All signs have been flipped, " +
+          "and it now reconciles.",
+      );
+    }
+  }
+
   return { transactions, openingBalance, closingBalance, skipped, warnings };
 }
 

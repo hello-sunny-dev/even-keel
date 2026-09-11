@@ -368,3 +368,62 @@ describe("a loan statement that marks its balance DR instead of with a minus", (
     ).toBe(0);
   });
 });
+
+describe("a balance column that counts the debt upwards", () => {
+  // the bank's loan statement prints the running balance as the size of the debt —
+  // no minus, no DR — so a drawdown taking it from 0 to 392,962.43 reads, to
+  // anything measuring the delta, exactly like money arriving.
+  const DRAWDOWN = [
+    "$0.00 DR 6.15% p.a.",
+    "Opening balance Current interest rate",
+    "16/02/2026 LMI FEES RECEIPT 6,712.43 6,712.43",
+    "16/02/2026 SWIFT TRANSFER RECEIPT 386,250.00 392,962.43",
+    "02/03/2026 TRANSFER RECEIPT 1,068.24 391,894.19",
+    "$391,894.19 DR $1,426.37",
+    "Closing balance Interest paid this financial year",
+  ].join("\n");
+
+  it("is caught by the statement's own balances and flipped", () => {
+    const { transactions } = parse(DRAWDOWN, { statementYear: 2026 });
+
+    expect(transactions.map((t) => t.amount)).toEqual([-6712.43, -386250, 1068.24]);
+  });
+
+  it("reconciles afterwards, which is the proof it was right to flip", () => {
+    const result = parse(DRAWDOWN, { statementYear: 2026 });
+    const moved = result.transactions.reduce((sum, t) => sum + Math.round(t.amount * 100), 0);
+
+    expect(
+      Math.round(result.openingBalance! * 100) + moved - Math.round(result.closingBalance! * 100),
+    ).toBe(0);
+  });
+
+  it("says so, because a silent sign flip is worse than a wrong one", () => {
+    expect(parse(DRAWDOWN, { statementYear: 2026 }).warnings.join(" ")).toMatch(/wrong way round/i);
+  });
+
+  it("leaves a statement that already reconciles alone", () => {
+    // The guard that matters: this only fires when negating everything turns a
+    // failure into an exact reconciliation, so it can never touch a good one.
+    const everyday = [
+      "Opening balance",
+      "1,000.00",
+      "01/07/2026 COLES 0292 -60.00 940.00",
+      "02/07/2026 CBA Acme Salary 500.00 1,440.00",
+      "Closing balance",
+      "1,440.00",
+    ].join("\n");
+    const { transactions, warnings } = parse(everyday, { statementYear: 2026 });
+
+    expect(transactions.map((t) => t.amount)).toEqual([-60, 500]);
+    expect(warnings.join(" ")).not.toMatch(/wrong way round/i);
+  });
+
+  it("does nothing when there are no balances to judge against", () => {
+    const { warnings } = parse("16/02/2026 LMI FEES RECEIPT 6,712.43", {
+      statementYear: 2026,
+    });
+
+    expect(warnings.join(" ")).not.toMatch(/wrong way round/i);
+  });
+});
