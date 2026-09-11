@@ -2,7 +2,7 @@
   "name": "even-keel",
   "version": "0.1.0",
   "private": true,
-  "description": "Net worth for two — a private household tracker.",
+  "description": "Net worth for two \u2014 a private household tracker.",
   "engines": {
     "node": ">=22"
   },
@@ -19,7 +19,7 @@
     "dump": "tsx scripts/dump-pdf.mts",
     "fixture:sample": "node scripts/make-sample-pdf.mjs",
     "prepare": "simple-git-hooks",
-    "db:setup": "tsx scripts/db-setup.mts"
+    "db:setup": "tsx --conditions=react-server scripts/db-setup.mts"
   },
   "dependencies": {
     "framer-motion": "^12.40.0",
