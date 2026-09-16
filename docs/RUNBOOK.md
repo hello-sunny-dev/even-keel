@@ -125,6 +125,14 @@ you out, which is a thing to do deliberately and not a side effect of shipping a
 Nothing echoes a secret: values are piped into the CLI rather than passed as arguments,
 because an argument shows up in `ps` and in the run log.
 
+**The project is not connected to GitHub, on purpose.** Creating it linked the
+repository automatically, and setting `gitProviderOptions.createDeployments` to
+`disabled` did not stop it — a push still produced a second production
+deployment alongside the one the workflow made, and whichever finished first
+took the domain. The link is removed entirely (`DELETE /v9/projects/{id}/link`),
+so deployments only ever come from this workflow. Reconnecting it in the Vercel
+dashboard brings the auto-deploys back.
+
 _Vercel API Call_ is the escape hatch for what the CLI does not cover — reading a
 project's settings, listing deployments, adding an alias. It prints the response, so
 never point it at a path that returns a secret value.
