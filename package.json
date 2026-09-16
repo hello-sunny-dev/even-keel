@@ -4,7 +4,7 @@
   "private": true,
   "description": "Net worth for two \u2014 a private household tracker.",
   "engines": {
-    "node": ">=22"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "next dev",

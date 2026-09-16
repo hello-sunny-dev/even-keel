@@ -16,7 +16,9 @@ export function Importer({ categories }: { categories: Category[] }) {
   const [rows, setRows] = useState<ProposedTransaction[]>([]);
   const [reports, setReports] = useState<FileReport[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<{ file: string; message: string; reason: string | null }[]>(
+    [],
+  );
   const [done, setDone] = useState<{ inserted: number; skipped: number } | null>(null);
 
   const keeping = rows.filter((r) => r.include && !r.duplicate);
@@ -25,7 +27,7 @@ export function Importer({ categories }: { categories: Category[] }) {
   async function read(files: FileList | null) {
     if (!files?.length) return;
     setBusy(true);
-    setError(null);
+    setErrors([]);
     setDone(null);
 
     const collected: ProposedTransaction[] = [];
@@ -38,8 +40,14 @@ export function Importer({ categories }: { categories: Category[] }) {
       body.append("file", file);
       const response = await fetch("/api/import", { method: "POST", body });
       if (!response.ok) {
-        const { error: message } = await response.json().catch(() => ({ error: "Upload failed." }));
-        setError(`${file.name}: ${message}`);
+        const body = await response.json().catch(() => ({ error: "Upload failed." }));
+        // Kept per file rather than overwritten: with five statements chosen
+        // at once, one `setError` left four failures invisible and the count
+        // looking like one bad file.
+        setErrors((current) => [
+          ...current,
+          { file: file.name, message: body.error ?? "Upload failed.", reason: body.reason ?? null },
+        ]);
         continue;
       }
       const result = (await response.json()) as Result;
@@ -74,7 +82,11 @@ export function Importer({ categories }: { categories: Category[] }) {
     });
     const result = await response.json();
     setBusy(false);
-    if (!response.ok) return setError(result.error ?? "Import failed.");
+    if (!response.ok) {
+      return setErrors([
+        { file: "Import", message: result.error ?? "Import failed.", reason: null },
+      ]);
+    }
     setDone(result);
     setRows([]);
     setReports([]);
@@ -97,13 +109,17 @@ export function Importer({ categories }: { categories: Category[] }) {
       </label>
 
       {busy && <p className="text-muted text-sm">Reading…</p>}
-      {error && (
-        <p
-          className="border-rule bg-sunk rounded-lg border p-3 text-sm"
-          style={{ color: "var(--fail)" }}
-        >
-          {error}
-        </p>
+      {errors.length > 0 && (
+        <ul className="border-rule bg-sunk space-y-2 rounded-lg border p-3">
+          {errors.map((e) => (
+            <li key={`${e.file}-${e.message}`}>
+              <p className="text-sm" style={{ color: "var(--fail)" }}>
+                {e.file}: {e.message}
+              </p>
+              {e.reason && <p className="text-faint mt-0.5 font-mono text-xs">{e.reason}</p>}
+            </li>
+          ))}
+        </ul>
       )}
 
       {done && (

@@ -19,7 +19,7 @@ import {
   finishUpload,
 } from "@/lib/db/queries";
 import { listHouseholdMembers } from "@/lib/auth-server";
-import { nameStripper } from "@/lib/redact";
+import { redactDescription, nameStripper } from "@/lib/redact";
 import { requireSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -61,7 +61,23 @@ export async function POST(request: Request) {
     const friendly = /password/i.test(message)
       ? "That PDF is password-protected. Save an unprotected copy and try again."
       : "That file could not be read as a PDF.";
-    return NextResponse.json({ error: friendly }, { status: 422 });
+    /**
+     * The reason, as well as the sentence.
+     *
+     * "That file could not be read as a PDF" is what a corrupt file, a
+     * password-protected file and a missing module all look like from here,
+     * and the last of those is not about the file at all — it sent somebody
+     * looking at their statements for a fault that was in the deployment.
+     * The technical message names which it is.
+     *
+     * Redacted on the way out because it is a string from a library and this
+     * app does not send strings it has not looked at; pdfjs puts no document
+     * content in them, but the rule does not depend on that staying true.
+     */
+    return NextResponse.json(
+      { error: friendly, reason: redactDescription(message).slice(0, 200) || null },
+      { status: 422 },
+    );
   }
 
   const parsed = parseStatementText(lines.join("\n"));
