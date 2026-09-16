@@ -98,6 +98,14 @@ jobs:
             put SESSION_SECRET "$(node -e 'process.stdout.write(crypto.randomUUID()+crypto.randomUUID())')"
           fi
 
+      # Before shipping, not after: an untraced runtime file is invisible until
+      # somebody uploads a statement to the deployed app.
+      - name: Runtime files are traced
+        run: |
+          npm ci
+          npm run build
+          npm run check:tracing
+
       - name: Deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}

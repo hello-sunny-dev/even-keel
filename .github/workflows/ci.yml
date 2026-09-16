@@ -35,6 +35,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      # A local build resolves anything in node_modules whether it was traced
+      # or not, so this is the only check that sees what the deployment will
+      # actually contain.
+      - name: Runtime files are traced
+        run: npm run check:tracing
+
       # The suite builds and starts the app itself, against a disposable
       # PGlite database. It is the only place the production build, the CSP
       # and the security headers are exercised the way they actually ship.

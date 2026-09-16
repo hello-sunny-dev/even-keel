@@ -13,9 +13,21 @@ const nextConfig: NextConfig = {
   devIndicators: false,
 
   outputFileTracingIncludes: {
-    // The extractor resolves these at runtime; without tracing them the path
-    // exists in the deployment but the files do not.
-    "/api/**": ["./node_modules/pdfjs-dist/standard_fonts/**"],
+    // Resolved at runtime, so the tracer never sees them and the deployment
+    // ends up with the path but not the file.
+    //
+    // `pdf.worker.mjs` is the one that mattered. With no worker configured,
+    // pdfjs falls back to a "fake worker" that imports it by a computed
+    // specifier from inside `pdf.mjs` — invisible to the tracer, which shipped
+    // `pdf.mjs` alone. On Vercel every statement failed with "Setting up fake
+    // worker failed: Cannot find module .../pdf.worker.mjs", which reached the
+    // user as "That file could not be read as a PDF". It cannot reproduce
+    // locally: a local production build has the whole of node_modules next to
+    // it, so the import resolves whether or not anything traced it.
+    "/api/**": [
+      "./node_modules/pdfjs-dist/standard_fonts/**",
+      "./node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs",
+    ],
   },
 
   /**

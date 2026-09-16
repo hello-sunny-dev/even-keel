@@ -143,6 +143,16 @@ export async function extractPdfLines(data: Uint8Array): Promise<string[]> {
   const pdfjs = await loadPdfjs();
   // pdfjs 6 moved `destroy` from the document to the loading task, which is
   // also the only handle that can tear down the worker.
+  // Told where the worker is rather than left to guess.
+  //
+  // Left unset, pdfjs resolves it relative to its own module, which is a
+  // computed import no bundler can follow — so it traced `pdf.mjs` and not the
+  // worker, and every deployed parse died on a module that was never shipped.
+  // The tracing config now carries the file; this points at it by absolute
+  // path so the resolution does not depend on where the runtime thinks it is.
+  const worker = resolveFrom("pdfjs-dist/legacy/build/pdf.worker.mjs");
+  if (worker) pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(worker).href;
+
   const loadingTask = pdfjs.getDocument({
     data,
     useSystemFonts: false,

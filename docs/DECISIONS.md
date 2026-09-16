@@ -510,3 +510,40 @@ against the login page and pass.
 borrowing whatever the import happened to leave behind, and the mobile specs
 assert they are not on the login page before measuring the width — a page that
 fits the screen because you are signed out is a green test that checks nothing.
+
+---
+
+### 30. The deployment is checked against its own file manifest, because nothing else can
+
+**Why.** Every statement failed on Vercel with _"That file could not be read as
+a PDF."_ The real message was underneath it:
+
+```
+Setting up fake worker failed: Cannot find module
+'/var/task/node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs'
+```
+
+With no worker configured, pdfjs falls back to a "fake worker" that imports
+`pdf.worker.mjs` by a computed specifier from inside `pdf.mjs`. A tracer cannot
+follow a computed specifier, so it shipped `pdf.mjs` and left the worker behind
+— the same shape of bug as the one in `pdf.ts` a few commits earlier, this time
+inside the library rather than in our own code.
+
+**Why no test caught it.** Every check runs where `node_modules` is on disk next
+to the build: `npm test`, `npm run build`, and the end-to-end suite, which drives
+a real production build in a real browser and imported the same fixture happily.
+An untraced file resolves anyway. The deployment is the only place where what
+was traced and what exists are the same set — and the first reader of that
+difference was somebody uploading their own bank statements.
+
+**Consequence.** `scripts/check-tracing.mjs` asserts against the trace manifest
+that `/api/import` produced: the worker, the library, and the standard fonts
+must be listed. It runs in CI after the build and again in the deploy workflow
+before anything ships. A file that the runtime needs and the tracer cannot see
+now has to be declared, and forgetting is a failed build rather than a failed
+import.
+
+**Also.** `GlobalWorkerOptions.workerSrc` is now set to the resolved absolute
+path, so pdfjs is told where the worker is instead of deducing it. The tracing
+entry is what makes the file exist; this is what stops the resolution depending
+on where the runtime believes it is standing.
