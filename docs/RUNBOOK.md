@@ -114,7 +114,8 @@ Actions → New repository secret:
 
 **Every time after that** — Actions → _Deploy to Vercel_ → Run workflow:
 
-- `production` off gives a preview URL. On aliases `even-keel.vercel.app`.
+- `production` off gives a preview URL. On aliases `your-app.vercel.app` —
+  Vercel picked that name because `even-keel` was already taken by another account.
 - `sync_env` on pushes `DATABASE_URL` from the repository secret into Vercel, and mints
   `SESSION_SECRET` if the project has none. Leave it off for an ordinary deploy: it is
   only needed the first time, or after the database password changes.

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       production:
-        description: "Deploy as production (aliases even-keel.vercel.app). Off makes a preview URL."
+        description: "Deploy as production (aliases your-app.vercel.app). Off makes a preview URL."
         type: boolean
         default: false
       sync_env:
