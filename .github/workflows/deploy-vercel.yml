@@ -15,6 +15,14 @@ on:
         type: boolean
         default: false
 
+# Not secrets: without the token they identify a project and nothing more.
+# Given to the CLI directly because `vercel link` asks which team it should use
+# and then waits for an answer that a runner has no way to give — the first
+# attempt sat on that prompt until it was cancelled.
+env:
+  VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -33,15 +41,6 @@ jobs:
             echo "::error::VERCEL_TOKEN is not set. Add it under Settings → Secrets and variables → Actions."
             exit 1
           fi
-
-      # Every run starts from a fresh checkout with no `.vercel` directory, so
-      # the project has to be linked before anything that needs to know which
-      # project it is — which includes reading and writing its environment
-      # variables. The first run creates it.
-      - name: Link the project
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx --yes vercel@latest link --yes --project even-keel --token="$VERCEL_TOKEN"
 
       # Values are piped in, never passed as arguments and never echoed: an
       # argument shows up in `ps` and in the step log, and one of these is a
