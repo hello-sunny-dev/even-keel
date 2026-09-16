@@ -1,0 +1,46 @@
+name: Vercel API Call
+
+# An escape hatch for the things the CLI does not cover — reading a project's
+# settings, listing deployments, adding an alias. The response is printed, so
+# never call a path that returns a secret value back.
+on:
+  workflow_dispatch:
+    inputs:
+      method:
+        description: "HTTP method"
+        required: true
+        default: "GET"
+        type: choice
+        options: [GET, POST, PATCH, DELETE]
+      path:
+        description: "Path after https://api.vercel.com/ (e.g. v9/projects or v9/projects/even-keel)"
+        required: true
+      body:
+        description: "JSON request body (optional, for POST/PATCH)"
+        required: false
+        default: ""
+
+jobs:
+  call:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Vercel API
+        env:
+          METHOD: ${{ inputs.method }}
+          API_PATH: ${{ inputs.path }}
+          BODY: ${{ inputs.body }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -e
+          args=(-sS -o response.json -w "%{http_code}" -X "$METHOD" \
+            "https://api.vercel.com/$API_PATH" \
+            -H "Authorization: Bearer $VERCEL_TOKEN" \
+            -H "Content-Type: application/json")
+          if [ -n "$BODY" ]; then args+=(-d "$BODY"); fi
+          http_code=$(curl "${args[@]}")
+          echo "HTTP $http_code"
+          cat response.json
+          echo "### $METHOD $API_PATH: HTTP $http_code" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat response.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"

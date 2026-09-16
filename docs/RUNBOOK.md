@@ -71,12 +71,9 @@ not in a commit message, not pasted into a chat. Nobody needs to see it to work 
    npm run db:setup
    ```
 
-4. **Vercel**: import the repository, and set `DATABASE_URL` and `SESSION_SECRET` in the
-   project's environment variables. Generate the secret with:
-
-   ```bash
-   node -e "console.log(crypto.randomUUID() + crypto.randomUUID())"
-   ```
+4. **Vercel**: deploy from GitHub Actions rather than from Vercel's Git integration —
+   see _Deploying_ below. A private household ledger does not want a preview URL minted
+   for every push, and a deploy ought to be something somebody asked for.
 
 5. **First visit** offers to create the first account. Everyone after that arrives by
    invite, from Settings.
@@ -103,9 +100,35 @@ Restore into an empty database with:
 pg_restore --no-owner --dbname "$DATABASE_URL" even-keel-YYYY-MM-DD.dump
 ```
 
-## Deploy
+## Deploying
 
-Vercel, from the repository. Set in the project's environment variables:
+One repository secret, then it is a button.
+
+**Once, by hand** — GitHub → the repository → Settings → Secrets and variables →
+Actions → New repository secret:
+
+| Secret         | Where it comes from                                                                                                   |
+| -------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `VERCEL_TOKEN` | vercel.com/account/tokens → Create Token. Scope it to this account; no expiry needed.                                 |
+| `DATABASE_URL` | Optional. The Supabase pooler string. Skip it to keep the connection string only in Vercel, and set it there instead. |
+
+**Every time after that** — Actions → _Deploy to Vercel_ → Run workflow:
+
+- `production` off gives a preview URL. On aliases `even-keel.vercel.app`.
+- `sync_env` on pushes `DATABASE_URL` from the repository secret into Vercel, and mints
+  `SESSION_SECRET` if the project has none. Leave it off for an ordinary deploy: it is
+  only needed the first time, or after the database password changes.
+
+`SESSION_SECRET` is minted once and never rotated by a deploy. Changing it signs both of
+you out, which is a thing to do deliberately and not a side effect of shipping a CSS fix.
+Nothing echoes a secret: values are piped into the CLI rather than passed as arguments,
+because an argument shows up in `ps` and in the run log.
+
+_Vercel API Call_ is the escape hatch for what the CLI does not cover — reading a
+project's settings, listing deployments, adding an alias. It prints the response, so
+never point it at a path that returns a secret value.
+
+### What the deployed app reads
 
 | Variable         | What it is                                                      |
 | ---------------- | --------------------------------------------------------------- |
@@ -113,7 +136,11 @@ Vercel, from the repository. Set in the project's environment variables:
 | `SESSION_SECRET` | Long random string; changing it signs everyone out              |
 | `PGLITE_DIR`     | Only to smoke-test a production build locally. Never in Vercel. |
 
-Secrets live in Vercel and in `.env.local`, never in the repository.
+Secrets live in Vercel and in `.env.local`, never in the repository. `VERCEL_TOKEN`, and
+`DATABASE_URL` if you choose to keep a copy there, live in the repository's Actions
+secrets — which is not the repository, but it is a second place the connection string
+exists. Skipping the `DATABASE_URL` secret and setting it in Vercel directly keeps it to
+one place, at the cost of doing that bit by hand.
 
 ## Accounts
 

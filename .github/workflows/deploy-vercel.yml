@@ -1,0 +1,76 @@
+name: Deploy to Vercel
+
+# Deploying from here rather than from Vercel's Git integration keeps one rule
+# intact: a deploy is something somebody asks for. A private household ledger
+# does not want a preview URL minted for every push.
+on:
+  workflow_dispatch:
+    inputs:
+      production:
+        description: "Deploy as production (aliases even-keel.vercel.app). Off makes a preview URL."
+        type: boolean
+        default: false
+      sync_env:
+        description: "Push DATABASE_URL from the repository secrets into Vercel first, and mint SESSION_SECRET if the project has none."
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Check the token is there
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::error::VERCEL_TOKEN is not set. Add it under Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
+      # Values are piped in, never passed as arguments and never echoed: an
+      # argument shows up in `ps` and in the step log, and one of these is a
+      # database password.
+      - name: Sync environment variables
+        if: ${{ inputs.sync_env }}
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -e
+          vercel() { npx --yes vercel@latest "$@" --token="$VERCEL_TOKEN"; }
+
+          if [ -n "$DATABASE_URL" ]; then
+            vercel env rm DATABASE_URL production --yes >/dev/null 2>&1 || true
+            printf '%s' "$DATABASE_URL" | vercel env add DATABASE_URL production >/dev/null
+            echo "DATABASE_URL set from the repository secret."
+          else
+            echo "No DATABASE_URL secret here — leaving whatever Vercel already holds."
+          fi
+
+          # Minted once and never rotated by a deploy. Changing it signs both of
+          # them out, which is a thing to do on purpose, not a side effect of
+          # shipping a CSS fix.
+          if vercel env ls production 2>/dev/null | grep -q SESSION_SECRET; then
+            echo "SESSION_SECRET already set — left alone."
+          else
+            node -e 'process.stdout.write(crypto.randomUUID() + crypto.randomUUID())' \
+              | vercel env add SESSION_SECRET production >/dev/null
+            echo "SESSION_SECRET minted."
+          fi
+
+      - name: Deploy
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -e
+          if [ "${{ inputs.production }}" = "true" ]; then FLAG="--prod"; else FLAG=""; fi
+          URL=$(npx --yes vercel@latest deploy --token="$VERCEL_TOKEN" --yes $FLAG)
+          echo "### Deployed to $URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "$URL"
