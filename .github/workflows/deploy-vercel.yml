@@ -42,35 +42,60 @@ jobs:
             exit 1
           fi
 
-      # Values are piped in, never passed as arguments and never echoed: an
-      # argument shows up in `ps` and in the step log, and one of these is a
-      # database password.
+      # The REST API, not `vercel env add`: the CLI stops to ask which
+      # environments the variable is for even when the target is already on the
+      # command line, and a runner has no way to answer. Two runs died on that
+      # prompt before this replaced it.
+      #
+      # `--data @-` reads the body from stdin, so neither the connection string
+      # nor the minted secret is ever an argument — an argument is visible in
+      # `ps` and in the step log. Only status codes are printed.
       - name: Sync environment variables
         if: ${{ inputs.sync_env }}
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          set -e
-          vercel() { npx --yes vercel@latest "$@" --token="$VERCEL_TOKEN"; }
+          set -euo pipefail
+          api="https://api.vercel.com"
+          auth="Authorization: Bearer $VERCEL_TOKEN"
 
-          if [ -n "$DATABASE_URL" ]; then
-            vercel env rm DATABASE_URL production --yes >/dev/null 2>&1 || true
-            printf '%s' "$DATABASE_URL" | vercel env add DATABASE_URL production >/dev/null
-            echo "DATABASE_URL set from the repository secret."
+          # `upsert=true` replaces a value that is already there, so a run after
+          # a database password change does the right thing without a delete.
+          put() {
+            code=$(KEY="$1" VALUE="$2" node -e '
+              process.stdout.write(JSON.stringify({
+                key: process.env.KEY,
+                value: process.env.VALUE,
+                type: "encrypted",
+                target: ["production"],
+              }));
+            ' | curl -sS -o /dev/null -w "%{http_code}" -X POST \
+                 "$api/v10/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_ORG_ID&upsert=true" \
+                 -H "$auth" -H "Content-Type: application/json" --data @-)
+            echo "$1 -> HTTP $code"
+            case "$code" in 2*) ;; *) echo "::error::Setting $1 failed"; exit 1 ;; esac
+          }
+
+          if [ -n "${DATABASE_URL:-}" ]; then
+            put DATABASE_URL "$DATABASE_URL"
           else
             echo "No DATABASE_URL secret here — leaving whatever Vercel already holds."
           fi
 
-          # Minted once and never rotated by a deploy. Changing it signs both of
-          # them out, which is a thing to do on purpose, not a side effect of
-          # shipping a CSS fix.
-          if vercel env ls production 2>/dev/null | grep -q SESSION_SECRET; then
+          # Minted once and never rotated by a deploy: changing it signs both of
+          # them out, which is a thing to do on purpose rather than a side
+          # effect of shipping a CSS fix.
+          existing=$(curl -sS -H "$auth" \
+            "$api/v9/projects/$VERCEL_PROJECT_ID/env?teamId=$VERCEL_ORG_ID" \
+            | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{
+                const envs = JSON.parse(s).envs || [];
+                process.stdout.write(envs.some(e => e.key === "SESSION_SECRET") ? "yes" : "no");
+              })')
+          if [ "$existing" = "yes" ]; then
             echo "SESSION_SECRET already set — left alone."
           else
-            node -e 'process.stdout.write(crypto.randomUUID() + crypto.randomUUID())' \
-              | vercel env add SESSION_SECRET production >/dev/null
-            echo "SESSION_SECRET minted."
+            put SESSION_SECRET "$(node -e 'process.stdout.write(crypto.randomUUID()+crypto.randomUUID())')"
           fi
 
       - name: Deploy
