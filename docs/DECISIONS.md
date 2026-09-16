@@ -547,3 +547,46 @@ import.
 path, so pdfjs is told where the worker is instead of deducing it. The tracing
 entry is what makes the file exist; this is what stops the resolution depending
 on where the runtime believes it is standing.
+
+---
+
+### 31. Which statement a row came off is part of what it means
+
+**Why.** 196 of 908 rows imported untagged, and the largest single group was
+eighteen identical fortnightly rows reading `TRANSFER RECEIPT TRANSFER FROM`,
+`+$1,068.24`. The obvious question: _if that is all it says, how
+are we supposed to know what it is?_
+
+The app already knew. The row is on the home-loan statement, money is arriving,
+the amount never changes and the gap is always fourteen days. Nothing else pays
+money into a mortgage. It is the repayment — unambiguous the moment you know
+which account you are looking at, and unanswerable without that.
+
+The categoriser was only ever shown the description. Decision #26 deliberately
+left `TRANSFER FROM` unmatched because on an everyday account it could be
+anybody's money, and that reasoning was right for the account it was thinking
+about and wrong for the other one.
+
+**Consequence.** `ParseResult` carries `isLoanAccount`, decided from what the
+statement contains rather than from its filename: a loan account charges
+interest and is never spent from, so both halves are required and a savings
+account that earns interest is not mistaken for a mortgage. On a loan
+statement, money arriving is the repayment (a transfer, not income), interest
+is `mortgage-interest`, and LMI and the settlement fee are the house purchase.
+On an everyday statement the same words still mean nothing in particular and
+still go to review — there is a test that asserts exactly that.
+
+**The repayment is not the cost.** Moving money from the everyday account to
+the loan account leaves the household holding the same wealth as a smaller
+debt. The part that actually leaves is the interest, which is why it needed a
+category of its own rather than being folded into `mortgage-repayment`.
+
+**The drawdown is still asked about.** One large debit at the start of a loan
+statement is a house being bought. It is the row where being wrong is most
+expensive, so it goes to the queue with its amount in front of the reader
+instead of being guessed at from the word "transfer".
+
+**And the queue now says what it knows.** A description alone is often not
+answerable; "twelve like this" and the merchant key make it so. The confirm
+table also names the statement each row came from — the only place it can,
+since the filename is deliberately never stored.

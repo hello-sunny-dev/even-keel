@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { Category } from "@/lib/categories";
 import type { FileReport, ProposedTransaction } from "@/lib/ingest";
 import { formatAUD } from "@/lib/money";
+import { accountOf } from "@/lib/parse/filenames";
 
 type Result = { report: FileReport; rows: ProposedTransaction[] };
 
@@ -201,7 +202,19 @@ export function Importer({ categories }: { categories: Category[] }) {
                         }
                       />
                     </td>
-                    <td className="tabular text-muted py-2 pr-3 whitespace-nowrap">{row.date}</td>
+                    <td className="tabular text-muted py-2 pr-3 whitespace-nowrap">
+                      {row.date}
+                      {/*
+                        Which statement a row came off is most of what tells a
+                        reader what it is — "TRANSFER FROM" means one thing on
+                        an everyday account and another on a mortgage. The
+                        confirm table is the only place this is still known:
+                        the filename is deliberately never stored.
+                      */}
+                      <span className="text-faint mt-0.5 block text-[11px] normal-case">
+                        {accountOf(row.sourceFile)}
+                      </span>
+                    </td>
                     <td className={`py-2 pr-3 ${excluded(row) ? "text-muted line-through" : ""}`}>
                       {row.description}
                       {row.duplicate && (

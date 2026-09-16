@@ -51,6 +51,23 @@ export const CATEGORIES: Category[] = [
     cadence: { unit: "month", count: 1 },
   },
 
+  /**
+   * The cost of the mortgage, which is not the repayment.
+   *
+   * The repayment moves money from the everyday account to the loan account —
+   * the household still has it, as a smaller debt. The interest is the part
+   * that actually leaves. Keeping them apart is what stops a fortnightly
+   * transfer being counted as spending.
+   */
+  {
+    id: "mortgage-interest",
+    name: "Mortgage Interest",
+    group: "Mortgage",
+    kind: "expense",
+    oneOff: false,
+    cadence: { unit: "month", count: 1 },
+  },
+
   {
     id: "insurance-home-contents",
     name: "Home & Contents Insurance",
@@ -276,6 +293,14 @@ export const CATEGORIES: Category[] = [
     kind: "expense",
     oneOff: false,
     cadence: { unit: "month", count: 1 },
+  },
+  {
+    id: "other-bank-fees",
+    name: "Bank Fees",
+    group: "Other",
+    kind: "expense",
+    oneOff: false,
+    cadence: { unit: "month", count: 12 },
   },
   {
     id: "other-discretionary",

@@ -77,7 +77,18 @@ function ReviewRow({ row, categories }: { row: Row; categories: StoredCategory[]
       <div className="flex items-baseline justify-between gap-4">
         <div className="min-w-0">
           <p className="font-medium">{row.description}</p>
-          <p className="tabular text-faint text-xs">{row.date} · nothing matched</p>
+          {/*
+            A description on its own is often not answerable — "TRANSFER
+            RECEIPT TRANSFER FROM" tells nobody anything. What makes it
+            answerable is that it happened twelve times, always for the same
+            amount: that is a standing arrangement, not a purchase. The ledger
+            already knows; it was simply not being shown.
+          */}
+          <p className="tabular text-faint text-xs">
+            {row.date}
+            {row.siblings > 0 && ` · ${row.siblings + 1} like this`}
+            {row.merchantKey && ` · ${row.merchantKey}`}
+          </p>
         </div>
         <p className="text-lg font-semibold">
           <Money amount={row.amount} cents />

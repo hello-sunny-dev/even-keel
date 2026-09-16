@@ -31,7 +31,33 @@ export type ParseResult = {
   /** Redacted lines that looked dated but carried no amount. Diagnostics only. */
   skipped: string[];
   warnings: string[];
+  /**
+   * Whether this statement is a loan account rather than a spending account.
+   *
+   * The same words mean different things on the two. "Transfer from", incoming,
+   * is a stranger's money on an everyday account and the household's own
+   * repayment on a loan — and it was the largest thing left untagged, eighteen
+   * identical fortnightly rows that the categoriser had no way to read because
+   * it was only ever shown the description.
+   */
+  isLoanAccount: boolean;
 };
+
+/**
+ * Decided from what the statement contains, not from its filename.
+ *
+ * A loan account charges interest and cannot be spent from; an everyday
+ * account is mostly card purchases and has no interest charge on it. Both
+ * halves are required, so a spending account that happens to earn interest is
+ * not mistaken for a mortgage.
+ */
+export function looksLikeLoanAccount(transactions: ParsedTransaction[]): boolean {
+  const interest = transactions.some((t) => /\binterest\s+charge\b/i.test(t.description));
+  const spending = transactions.some((t) =>
+    /\bvisa\s+purchase\b|\beftpos\b|\batm\b|\bosko\b/i.test(t.description),
+  );
+  return interest && !spending;
+}
 
 const MONTHS: Record<string, number> = {
   jan: 1,
@@ -541,7 +567,14 @@ export function parseStatementText(
     }
   }
 
-  return { transactions, openingBalance, closingBalance, skipped, warnings };
+  return {
+    transactions,
+    openingBalance,
+    closingBalance,
+    skipped,
+    warnings,
+    isLoanAccount: looksLikeLoanAccount(transactions),
+  };
 }
 
 /**

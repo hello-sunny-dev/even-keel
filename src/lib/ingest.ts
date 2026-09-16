@@ -1,5 +1,6 @@
 import { effectiveKind } from "./aggregate";
 import { isInternalTransfer } from "./transfers";
+import { classifyLoanRow } from "./loan-statement";
 import { merchantKey } from "./redact";
 import { categorize } from "./categorize";
 import { lookUp, type Categories } from "./categories";
@@ -53,7 +54,9 @@ export function proposeFrom(
    */
   stripNames: (text: string) => string = (text) => text,
 ): ProposedTransaction[] {
-  return result.transactions.map((t) => propose(t, sourceFile, categories, rules, stripNames));
+  return result.transactions.map((t) =>
+    propose(t, sourceFile, categories, rules, stripNames, result.isLoanAccount),
+  );
 }
 
 function propose(
@@ -62,13 +65,25 @@ function propose(
   categories: Categories,
   rules: Rule[],
   stripNames: (text: string) => string,
+  isLoanAccount = false,
 ): ProposedTransaction {
   const description = stripNames(t.description) || t.description;
+
+  // The statement this row came off decides what its words mean, so it is
+  // read first. On an everyday account "transfer from" is a stranger; on a
+  // loan account it is the household's own repayment.
+  const loan = isLoanAccount
+    ? classifyLoanRow(description, t.amount)
+    : { kind: "unknown" as const };
+
   // Asked before the category is, because a transfer has no category and
   // giving it one would put it back into a total it must stay out of.
-  const transfer = isInternalTransfer(description);
+  const transfer = loan.kind === "transfer" || isInternalTransfer(description);
   const match = transfer ? null : categorize(description, categories, rules);
-  const categoryId = match?.status === "matched" ? match.categoryId : null;
+  const fromLoan = loan.kind === "category" && lookUp(categories, loan.categoryId) ? loan : null;
+  const categoryId = transfer
+    ? null
+    : (fromLoan?.categoryId ?? (match?.status === "matched" ? match.categoryId : null));
   const category = lookUp(categories, categoryId);
 
   return {
