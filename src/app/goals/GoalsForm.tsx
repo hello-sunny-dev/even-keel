@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Field } from "@/components/AuthShell";
-import { Money } from "@/components/ui";
+import { Button, Money } from "@/components/ui";
 import { goalProgress, suggestScenarios, type Goal, type SavingsScenario } from "@/lib/goals";
 
 type Draft = {
@@ -132,13 +132,9 @@ export function GoalForm({
       )}
 
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={busy || !usable}
-          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-        >
+        <Button type="submit" disabled={busy || !usable}>
           {busy ? "Saving…" : goal ? "Update goal" : "Set goal"}
-        </button>
+        </Button>
         {message && (
           <span
             className="text-sm"
@@ -252,13 +248,9 @@ export function ScenarioLadder({
       </ul>
 
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={busy}
-          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-        >
+        <Button type="submit" disabled={busy}>
           {busy ? "Saving…" : "Save scenarios"}
-        </button>
+        </Button>
         {message && (
           <span
             className="text-sm"

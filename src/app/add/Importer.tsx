@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/ui";
 import type { Category } from "@/lib/categories";
 import type { FileReport, ProposedTransaction } from "@/lib/ingest";
 import { formatAUD } from "@/lib/money";
@@ -266,14 +267,9 @@ export function Importer({ categories }: { categories: Category[] }) {
             </table>
           </div>
 
-          <button
-            type="button"
-            onClick={commit}
-            disabled={busy || keeping.length === 0}
-            className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-          >
+          <Button type="button" onClick={commit} disabled={busy || keeping.length === 0}>
             Import {keeping.length} transactions
-          </button>
+          </Button>
         </>
       )}
     </div>

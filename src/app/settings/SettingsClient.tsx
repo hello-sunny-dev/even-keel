@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui";
 import { Field } from "@/components/AuthShell";
 import type { Invite } from "@/lib/auth-server";
 
@@ -44,13 +45,12 @@ export function ChangePassword() {
         value={form.newPassword}
         onChange={(e) => setForm((f) => ({ ...f, newPassword: e.target.value }))}
       />
-      <button
+      <Button
         type="submit"
         disabled={busy || !form.currentPassword || form.newPassword.length < 10}
-        className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
       >
         {busy ? "Changing…" : "Change password"}
-      </button>
+      </Button>
       {message && (
         <p
           className="text-sm"
@@ -92,14 +92,9 @@ export function Invites({ initial, origin }: { initial: Invite[]; origin: string
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => create("join")}
-          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-        >
+        <Button type="button" disabled={busy} onClick={() => create("join")}>
           Invite into this household
-        </button>
+        </Button>
         <button
           type="button"
           disabled={busy}

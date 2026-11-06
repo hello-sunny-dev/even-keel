@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui";
 import { Field } from "@/components/AuthShell";
 
 type Mode = { endpoint: string; token?: string; askHousehold: boolean; verb: string };
@@ -71,13 +72,9 @@ export function AccountForm({ endpoint, token, askHousehold, verb }: Mode) {
           onChange={set("householdName")}
         />
       )}
-      <button
-        type="submit"
-        disabled={busy || !form.email || form.password.length < 10}
-        className="bg-ink text-paper disabled:bg-track disabled:text-muted w-full rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-      >
+      <Button fullWidth type="submit" disabled={busy || !form.email || form.password.length < 10}>
         {busy ? "Creating…" : verb}
-      </button>
+      </Button>
       {error && (
         <p className="text-sm" style={{ color: "var(--fail)" }} role="alert">
           {error}

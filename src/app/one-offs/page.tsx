@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Empty, Heading, Money, Note } from "@/components/ui";
+import { Button, Empty, Heading, Money, Note } from "@/components/ui";
 import {
   availableMonths,
   monthlySummary,
@@ -87,12 +87,9 @@ export default async function OneOffs({
                 </option>
               ))}
             </select>
-            <button
-              type="submit"
-              className="border-rule-strong rounded-lg border px-3 py-2 text-sm"
-            >
+            <Button variant="secondary" type="submit">
               Show
-            </button>
+            </Button>
           </form>
 
           <section className="border-rule bg-sunk mb-8 rounded-lg border p-4">

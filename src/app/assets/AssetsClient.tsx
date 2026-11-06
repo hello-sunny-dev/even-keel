@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Money } from "@/components/ui";
+import { Button, Money } from "@/components/ui";
 import type { Account, AccountMovement, Balance } from "@/lib/networth";
 
 const KINDS: { value: Account["kind"]; label: string; bucket: Account["bucket"] }[] = [
@@ -67,13 +67,9 @@ export function AddAccount() {
           ))}
         </select>
       </label>
-      <button
-        type="submit"
-        disabled={busy || !name.trim()}
-        className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-      >
+      <Button type="submit" disabled={busy || !name.trim()}>
         {busy ? "Adding…" : "Add account"}
-      </button>
+      </Button>
       {error && (
         <span className="w-full text-sm" role="alert" style={{ color: "var(--fail)" }}>
           {error}

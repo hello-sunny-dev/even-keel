@@ -1,3 +1,4 @@
+export { Button } from "./Button";
 export { Empty } from "./Empty";
 export { Heading } from "./Heading";
 export { Money } from "./Money";

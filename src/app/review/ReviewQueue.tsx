@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Money } from "@/components/ui";
+import { Button, Money } from "@/components/ui";
 import type { StoredCategory } from "@/lib/db/queries";
 import type { TxnRow } from "@/lib/db/queries";
 
@@ -120,29 +120,21 @@ function ReviewRow({ row, categories }: { row: Row; categories: StoredCategory[]
                 </option>
               ))}
             </select>
-            <button
-              type="submit"
-              disabled={busy || !categoryId}
-              className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-            >
+            <Button type="submit" disabled={busy || !categoryId}>
               {busy ? "Tagging…" : "Tag"}
-            </button>
-            <button
-              type="button"
-              onClick={() => setSplitting(true)}
-              className="border-rule-strong rounded-lg border px-3 py-2 text-sm"
-            >
+            </Button>
+            <Button variant="secondary" type="button" onClick={() => setSplitting(true)}>
               Split
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="secondary"
               type="button"
               disabled={busy}
               onClick={markTransfer}
               title="Money moved between our own accounts — not spending, not income"
-              className="border-rule-strong rounded-lg border px-3 py-2 text-sm"
             >
               Transfer
-            </button>
+            </Button>
           </div>
 
           {categoryId && (
@@ -293,13 +285,12 @@ function SplitForm({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
           type="submit"
           disabled={busy || remaining !== 0 || parts.some((p) => !p.categoryId)}
-          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
         >
           {busy ? "Splitting…" : "Split it"}
-        </button>
+        </Button>
         <button type="button" onClick={onCancel} className="text-muted text-sm underline">
           Cancel
         </button>

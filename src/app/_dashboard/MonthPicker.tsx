@@ -1,3 +1,4 @@
+import { Button } from "@/components/ui";
 import { formatMonth } from "@/lib/months";
 
 export function MonthPicker({ month, months }: { month: string; months: string[] }) {
@@ -23,9 +24,9 @@ export function MonthPicker({ month, months }: { month: string; months: string[]
             </option>
           ))}
       </select>
-      <button type="submit" className="border-rule-strong rounded-lg border px-3 py-2 text-sm">
+      <Button variant="secondary" type="submit">
         Show
-      </button>
+      </Button>
       {years.length > 1 && (
         <span className="text-faint self-center text-xs">
           {years.length} years of history · showing {year}

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Importer } from "./Importer";
 import { OneTransaction, WholeMonth } from "./ManualEntry";
-import { Heading, Note } from "@/components/ui";
+import { Button, Heading, Note } from "@/components/ui";
 import { currentMonthIn, todayIn } from "@/lib/dates";
 import { categoriesWithHistory, listCategories, monthTotals } from "@/lib/db/queries";
 import { addMonths, formatMonth } from "@/lib/months";
@@ -91,12 +91,9 @@ export default async function AddPage({
                 className="border-rule-strong bg-sheet mt-1 rounded-lg border px-3 py-2 text-sm"
               />
             </label>
-            <button
-              type="submit"
-              className="border-rule-strong rounded-lg border px-3 py-2 text-sm"
-            >
+            <Button variant="secondary" type="submit">
               Show {formatMonth(month, { long: true })}
-            </button>
+            </Button>
           </form>
           <WholeMonth
             categories={live}

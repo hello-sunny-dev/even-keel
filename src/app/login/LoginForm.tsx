@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "@/components/ui";
 import { Field } from "@/components/AuthShell";
 
 export function LoginForm({ next }: { next: string }) {
@@ -51,13 +52,9 @@ export function LoginForm({ next }: { next: string }) {
         autoComplete="current-password"
         onChange={(e) => setPassword(e.target.value)}
       />
-      <button
-        type="submit"
-        disabled={busy || !email || !password}
-        className="bg-ink text-paper disabled:bg-track disabled:text-muted w-full rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-      >
+      <Button fullWidth type="submit" disabled={busy || !email || !password}>
         {busy ? "Checking…" : "Sign in"}
-      </button>
+      </Button>
       {error && (
         <p className="text-sm" style={{ color: "var(--fail)" }} role="alert">
           {error}

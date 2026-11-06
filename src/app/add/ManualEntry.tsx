@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Money } from "@/components/ui";
+import { Button, Money } from "@/components/ui";
 import type { StoredCategory } from "@/lib/db/queries";
 
 async function post(body: unknown): Promise<{ ok: boolean; error?: string }> {
@@ -136,13 +136,9 @@ export function OneTransaction({
       </div>
 
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={busy || !form.amount || !form.description.trim()}
-          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-        >
+        <Button type="submit" disabled={busy || !form.amount || !form.description.trim()}>
           {busy ? "Adding…" : "Add transaction"}
-        </button>
+        </Button>
         {message && (
           <span
             className="text-sm"
@@ -281,13 +277,9 @@ export function WholeMonth({
       )}
 
       <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={busy}
-          className="bg-ink text-paper disabled:bg-track disabled:text-muted rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed"
-        >
+        <Button type="submit" disabled={busy}>
           {busy ? "Saving…" : existing.length > 0 ? "Update the month" : "Save the month"}
-        </button>
+        </Button>
         {message && (
           <span
             className="text-sm"
